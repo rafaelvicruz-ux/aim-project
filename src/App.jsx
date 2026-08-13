@@ -1,13 +1,14 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { GameArena } from "./components/GameArena";
+import { AuthPanel } from "./components/AuthPanel";
 import { ModeCard } from "./components/ModeCard";
 import { SessionStats } from "./components/SessionStats";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TrainingBuilder } from "./components/TrainingBuilder";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { customTemplate, defaultPresets } from "./data/presets";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
-const CUSTOM_MAPS_STORAGE_KEY = "aimforge-custom-maps";
 
 function buildSummary(rawStats) {
   const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
@@ -30,21 +31,12 @@ function buildSummary(rawStats) {
 
 export default function App() {
   const [customDraft, setCustomDraft] = useState(customTemplate);
-  const [customModes, setCustomModes] = useState(() => {
-    const savedModes = window.localStorage.getItem(CUSTOM_MAPS_STORAGE_KEY);
-
-    if (!savedModes) {
-      return [];
-    }
-
-    try {
-      return JSON.parse(savedModes);
-    } catch {
-      return [];
-    }
-  });
+  const [customModes, setCustomModes] = useState([]);
   const [activeMode, setActiveMode] = useState(null);
   const [lastSession, setLastSession] = useState(null);
+  const [session, setSession] = useState(null);
+  const [authForm, setAuthForm] = useState({ email: "", password: "" });
+  const [authMessage, setAuthMessage] = useState("");
   const [settings, setSettings] = useState(() => {
     const savedSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
 
@@ -58,7 +50,6 @@ export default function App() {
       return { sensitivity: 1 };
     }
   });
-
   const allModes = useMemo(() => [...defaultPresets, ...customModes], [customModes]);
 
   useEffect(() => {
@@ -66,18 +57,111 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
-    window.localStorage.setItem(CUSTOM_MAPS_STORAGE_KEY, JSON.stringify(customModes));
-  }, [customModes]);
+    if (!supabase) {
+      return undefined;
+    }
+
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        setSession(data.session ?? null);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, nextSession) => {
+      setSession(nextSession);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
+      setCustomModes([]);
+      return;
+    }
+
+    const loadMaps = async () => {
+      const { data, error } = await supabase
+        .from("custom_maps")
+        .select("id, name, description, config, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+
+      const normalizedMaps = (data ?? []).map((row) => ({
+        id: row.id,
+        ...row.config,
+        name: row.name,
+        description: row.description,
+        creatorId: session.user.id,
+      }));
+
+      setCustomModes(normalizedMaps);
+    };
+
+    loadMaps();
+  }, [session]);
 
   const handleSaveCustomMode = () => {
+    if (!supabase || !session?.user) {
+      setAuthMessage("Entre na sua conta para salvar mapas no Supabase.");
+      return;
+    }
+
     const nextMode = {
       ...customDraft,
-      id: `custom-${Date.now()}`,
       name: customDraft.name.trim() || "Meu mapa 3D",
       description: customDraft.description.trim() || "Mapa personalizado.",
     };
 
-    setCustomModes((currentModes) => [nextMode, ...currentModes]);
+    supabase
+      .from("custom_maps")
+      .insert({
+        user_id: session.user.id,
+        name: nextMode.name,
+        description: nextMode.description,
+        config: nextMode,
+      })
+      .select("id")
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          setAuthMessage(error.message);
+          return;
+        }
+
+        setCustomModes((currentModes) => [{ ...nextMode, id: data.id, creatorId: session.user.id }, ...currentModes]);
+        setAuthMessage("Mapa salvo com sucesso.");
+      });
+  };
+
+  const handleDeleteCustomMode = (modeId) => {
+    if (!supabase || !session?.user) {
+      return;
+    }
+
+    supabase
+      .from("custom_maps")
+      .delete()
+      .eq("id", modeId)
+      .then(({ error }) => {
+        if (error) {
+          setAuthMessage(error.message);
+          return;
+        }
+
+        setCustomModes((currentModes) => currentModes.filter((mode) => mode.id !== modeId));
+      });
   };
 
   const handleFinish = (rawStats) => {
@@ -86,6 +170,41 @@ export default function App() {
       stats: buildSummary(rawStats),
     });
     setActiveMode(null);
+  };
+
+  const handleSignUp = async () => {
+    if (!supabase) {
+      return;
+    }
+
+    const { error } = await supabase.auth.signUp({
+      email: authForm.email,
+      password: authForm.password,
+    });
+
+    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se o projeto exigir confirmação.");
+  };
+
+  const handleSignIn = async () => {
+    if (!supabase) {
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authForm.email,
+      password: authForm.password,
+    });
+
+    setAuthMessage(error ? error.message : "Login realizado com sucesso.");
+  };
+
+  const handleSignOut = async () => {
+    if (!supabase) {
+      return;
+    }
+
+    const { error } = await supabase.auth.signOut();
+    setAuthMessage(error ? error.message : "Sessão encerrada.");
   };
 
   if (activeMode) {
@@ -110,6 +229,17 @@ export default function App() {
         </div>
       </section>
 
+      <AuthPanel
+        session={session}
+        authForm={authForm}
+        onAuthFormChange={setAuthForm}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
+        onSignOut={handleSignOut}
+        authMessage={authMessage}
+        isConfigured={isSupabaseConfigured}
+      />
+
       <section className="panel">
         <div className="panel__header">
           <div>
@@ -120,7 +250,12 @@ export default function App() {
 
         <div className="mode-grid">
           {allModes.map((mode) => (
-            <ModeCard key={mode.id} mode={mode} onStart={setActiveMode} />
+            <ModeCard
+              key={mode.id}
+              mode={mode}
+              onStart={setActiveMode}
+              onDelete={mode.creatorId === session?.user?.id ? handleDeleteCustomMode : undefined}
+            />
           ))}
         </div>
       </section>

@@ -1,5 +1,5 @@
 ﻿import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { PointerLockControls } from "@react-three/drei";
+import { PointerLockControls, Sparkles, Stars } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
@@ -142,14 +142,15 @@ function usePressedKeys() {
   return keysRef;
 }
 
-function WeaponViewModel() {
+function WeaponViewModel({ shotPulse }) {
   const weaponRef = useRef(null);
+  const flashRef = useRef(null);
   const { camera } = useThree();
   const forward = useMemo(() => new THREE.Vector3(), []);
   const right = useMemo(() => new THREE.Vector3(), []);
   const up = useMemo(() => new THREE.Vector3(0, 1, 0), []);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!weaponRef.current) {
       return;
     }
@@ -160,9 +161,20 @@ function WeaponViewModel() {
     weaponRef.current.position.copy(camera.position);
     weaponRef.current.position.addScaledVector(forward, 0.7);
     weaponRef.current.position.addScaledVector(right, 0.24);
-    weaponRef.current.position.y -= 0.26;
+    weaponRef.current.position.y -= 0.26 - Math.sin(performance.now() * 0.01) * 0.01;
     weaponRef.current.quaternion.copy(camera.quaternion);
+    weaponRef.current.rotation.x -= shotPulse * 0.04;
+
+    if (flashRef.current) {
+      flashRef.current.material.opacity = Math.max(0, flashRef.current.material.opacity - delta * 8);
+    }
   });
+
+  useEffect(() => {
+    if (flashRef.current && shotPulse > 0) {
+      flashRef.current.material.opacity = 0.95;
+    }
+  }, [shotPulse]);
 
   return (
     <group ref={weaponRef}>
@@ -173,6 +185,10 @@ function WeaponViewModel() {
       <mesh position={[0.12, -0.01, -0.48]} castShadow>
         <cylinderGeometry args={[0.04, 0.04, 0.4, 16]} />
         <meshStandardMaterial color="#ff8f32" emissive="#8a3f00" emissiveIntensity={0.6} />
+      </mesh>
+      <mesh ref={flashRef} position={[0.12, -0.01, -0.72]}>
+        <sphereGeometry args={[0.08, 10, 10]} />
+        <meshBasicMaterial color="#ffd27f" transparent opacity={0} />
       </mesh>
     </group>
   );
@@ -237,7 +253,13 @@ function Enemy({ enemy, registerEnemy }) {
     <group ref={groupRef} position={[enemy.x, enemy.y, enemy.z]}>
       <mesh castShadow position={[0, 1.2, 0]}>
         <capsuleGeometry args={[0.45, 1.3, 6, 12]} />
-        <meshStandardMaterial color="#ff6d3a" roughness={0.45} metalness={0.15} />
+        <meshStandardMaterial
+          color="#ff6d3a"
+          emissive="#3a0f00"
+          emissiveIntensity={0.35}
+          roughness={0.45}
+          metalness={0.15}
+        />
       </mesh>
       <mesh castShadow position={[0, 2.35, 0]}>
         <sphereGeometry args={[0.34, 18, 18]} />
@@ -251,7 +273,41 @@ function Enemy({ enemy, registerEnemy }) {
   );
 }
 
-function FpsScene({ enemies, bindShooter, moveSpeed, sensitivity }) {
+function HitBurst({ burst }) {
+  return (
+    <group position={[burst.x, burst.y + 1.2, burst.z]}>
+      <mesh scale={0.4 + burst.life * 1.4}>
+        <sphereGeometry args={[0.28, 10, 10]} />
+        <meshBasicMaterial color="#ffd27f" transparent opacity={burst.life} />
+      </mesh>
+    </group>
+  );
+}
+
+function ArenaProps() {
+  return (
+    <>
+      {[-20, 0, 20].map((x) => (
+        <mesh key={`pillar-${x}`} position={[x, 3.2, -22]} castShadow receiveShadow>
+          <boxGeometry args={[2.2, 6.4, 2.2]} />
+          <meshStandardMaterial color="#1a2333" metalness={0.2} roughness={0.82} />
+        </mesh>
+      ))}
+      {[-14, 14].map((z) => (
+        <mesh key={`crate-${z}`} position={[16, 1.2, z]} castShadow receiveShadow>
+          <boxGeometry args={[2.4, 2.4, 2.4]} />
+          <meshStandardMaterial color="#2d374d" metalness={0.22} roughness={0.7} />
+        </mesh>
+      ))}
+      <mesh position={[-18, 1.5, 12]} castShadow receiveShadow>
+        <cylinderGeometry args={[1.3, 1.3, 3.2, 18]} />
+        <meshStandardMaterial color="#202e47" metalness={0.3} roughness={0.66} />
+      </mesh>
+    </>
+  );
+}
+
+function FpsScene({ enemies, bursts, bindShooter, moveSpeed, sensitivity, shotPulse }) {
   const enemyObjectsRef = useRef(new Map());
   const { camera } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -288,19 +344,23 @@ function FpsScene({ enemies, bindShooter, moveSpeed, sensitivity }) {
 
   return (
     <>
-      <color attach="background" args={["#070b14"]} />
-      <fog attach="fog" args={["#070b14", 20, 70]} />
-      <ambientLight intensity={0.75} />
+      <color attach="background" args={["#05070d"]} />
+      <fog attach="fog" args={["#070b14", 22, 76]} />
+      <Stars radius={120} depth={42} count={2000} factor={4} saturation={0} fade speed={0.5} />
+      <Sparkles count={36} scale={[80, 20, 80]} size={4} speed={0.35} color="#7eb8ff" />
+      <ambientLight intensity={0.9} />
       <directionalLight
         position={[8, 16, 6]}
-        intensity={1.4}
+        intensity={1.55}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <spotLight position={[-10, 18, -6]} intensity={38} angle={0.35} penumbra={0.5} color="#76b6ff" />
+      <spotLight position={[-10, 18, -6]} intensity={42} angle={0.35} penumbra={0.5} color="#76b6ff" />
+      <pointLight position={[0, 6, -14]} intensity={14} color="#ff7d2d" distance={20} />
+      <pointLight position={[0, 8, 18]} intensity={10} color="#65b4ff" distance={24} />
       <PlayerRig speed={PLAYER_SPEED + moveSpeed * 0.01} sensitivity={sensitivity} />
-      <WeaponViewModel />
+      <WeaponViewModel shotPulse={shotPulse} />
 
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[90, 90, 30, 30]} />
@@ -311,7 +371,7 @@ function FpsScene({ enemies, bindShooter, moveSpeed, sensitivity }) {
 
       <mesh position={[0, 16, -38]} receiveShadow>
         <boxGeometry args={[90, 32, 2]} />
-        <meshStandardMaterial color="#0d1526" emissive="#12253e" emissiveIntensity={0.18} />
+        <meshStandardMaterial color="#0d1526" emissive="#12253e" emissiveIntensity={0.2} />
       </mesh>
       <mesh position={[38, 12, 0]} receiveShadow>
         <boxGeometry args={[2, 24, 90]} />
@@ -322,8 +382,13 @@ function FpsScene({ enemies, bindShooter, moveSpeed, sensitivity }) {
         <meshStandardMaterial color="#0d1526" />
       </mesh>
 
+      <ArenaProps />
+
       {enemies.map((enemy) => (
         <Enemy key={enemy.id} enemy={enemy} registerEnemy={registerEnemy} />
+      ))}
+      {bursts.map((burst) => (
+        <HitBurst key={burst.id} burst={burst} />
       ))}
     </>
   );
@@ -332,6 +397,8 @@ function FpsScene({ enemies, bindShooter, moveSpeed, sensitivity }) {
 export function GameArena({ mode, settings, onFinish, onExit }) {
   const [timeLeft, setTimeLeft] = useState(mode.duration);
   const [enemies, setEnemies] = useState([]);
+  const [bursts, setBursts] = useState([]);
+  const [shotPulse, setShotPulse] = useState(0);
   const [stats, setStats] = useState({
     score: 0,
     shots: 0,
@@ -353,6 +420,15 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
   useEffect(() => {
     statsRef.current = stats;
   }, [stats]);
+
+  useEffect(() => {
+    if (!shotPulse) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setShotPulse(0), 90);
+    return () => window.clearTimeout(timer);
+  }, [shotPulse]);
 
   useEffect(() => {
     const finalize = (completed, remainingMs) => {
@@ -383,19 +459,24 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
           .filter((enemy) => enemy.expiresAt > now)
           .map((enemy) => updateEnemy(enemy, mode, elapsedSeconds, 1 / 60));
 
-        const shouldSpawn =
+        while (
           now - lastSpawnAtRef.current >= mode.spawnRate &&
           nextEnemies.length < mode.simultaneousTargets &&
           remainingMs > 0 &&
-          statsRef.current.hits < mode.goalHits;
-
-        if (shouldSpawn) {
-          lastSpawnAtRef.current = now;
+          statsRef.current.hits < mode.goalHits
+        ) {
+          lastSpawnAtRef.current += mode.spawnRate;
           nextEnemies = [...nextEnemies, spawnEnemy(mode, now)];
         }
 
         return nextEnemies;
       });
+
+      setBursts((currentBursts) =>
+        currentBursts
+          .map((burst) => ({ ...burst, life: burst.life - 1 / 20 }))
+          .filter((burst) => burst.life > 0),
+      );
 
       if (statsRef.current.hits >= mode.goalHits) {
         finalize(true, remainingMs);
@@ -420,6 +501,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         return;
       }
 
+      setShotPulse(1);
       const enemyId = shooterRef.current();
 
       if (!enemyId) {
@@ -451,6 +533,17 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
             reactionTimes: [...currentStats.reactionTimes, Math.round(reaction)],
           };
         });
+
+        setBursts((currentBursts) => [
+          ...currentBursts,
+          {
+            id: `${enemyId}-burst`,
+            x: target.x,
+            y: target.y,
+            z: target.z,
+            life: 1,
+          },
+        ]);
 
         return currentEnemies.filter((enemy) => enemy.id !== enemyId);
       });
@@ -511,14 +604,16 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         <Canvas shadows camera={{ fov: 75, near: 0.1, far: 150 }} className="arena__canvas">
           <FpsScene
             enemies={enemies}
+            bursts={bursts}
             moveSpeed={mode.moveSpeed}
             sensitivity={settings.sensitivity}
+            shotPulse={shotPulse}
             bindShooter={(fn) => {
               shooterRef.current = fn;
             }}
           />
         </Canvas>
-        <div className="crosshair crosshair--fps" />
+        <div className={shotPulse ? "crosshair crosshair--fps crosshair--active" : "crosshair crosshair--fps"} />
         <div className="arena__overlay">
           <button id="fps-lock-button" className="primary-button" type="button">
             Entrar no mapa
