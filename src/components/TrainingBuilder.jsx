@@ -1,18 +1,22 @@
-import { customTemplate } from "../data/presets";
+﻿import { customTemplate, patternOptions } from "../data/presets";
 
 const scoringOptions = [
-  { value: "precision", label: "Precision", help: "Pontua mais por precisão consistente." },
-  { value: "combo", label: "Combo", help: "Premia sequências rápidas sem errar." },
-  { value: "tracking", label: "Tracking", help: "Focado em alvos em movimento." },
+  { value: "precision", label: "Precision", help: "Score focado em acerto limpo e estável." },
+  { value: "combo", label: "Combo", help: "Valoriza sequências longas sem perder ritmo." },
+  { value: "tracking", label: "Tracking", help: "Premia leitura de alvo com movimento constante." },
 ];
 
 const rangeFields = [
-  { key: "duration", label: "Duração", min: 15, max: 120, step: 5, unit: "s" },
-  { key: "targetSize", label: "Tamanho do alvo", min: 18, max: 80, step: 2, unit: "px" },
-  { key: "spawnRate", label: "Tempo de spawn", min: 200, max: 1800, step: 50, unit: "ms" },
-  { key: "targetLifetime", label: "Vida do alvo", min: 350, max: 5000, step: 50, unit: "ms" },
-  { key: "moveSpeed", label: "Velocidade", min: 0, max: 220, step: 10, unit: "px/s" },
-  { key: "simultaneousTargets", label: "Alvos simultâneos", min: 1, max: 5, step: 1, unit: "" },
+  { key: "duration", label: "Tempo limite", min: 15, max: 180, step: 5, unit: "s" },
+  { key: "goalHits", label: "Acertos para concluir", min: 5, max: 120, step: 1, unit: " hits" },
+  { key: "targetSize", label: "Tamanho do alvo", min: 18, max: 90, step: 2, unit: "px" },
+  { key: "spawnRate", label: "Tempo de spawn", min: 180, max: 1800, step: 20, unit: "ms" },
+  { key: "targetLifetime", label: "Vida do alvo", min: 400, max: 5000, step: 50, unit: "ms" },
+  { key: "moveSpeed", label: "Velocidade frontal", min: 0, max: 260, step: 10, unit: "px/s" },
+  { key: "strafeIntensity", label: "Strafe lateral", min: 0, max: 180, step: 5, unit: "px/s" },
+  { key: "verticalDrift", label: "Deriva vertical", min: 0, max: 140, step: 5, unit: "px/s" },
+  { key: "simultaneousTargets", label: "Inimigos simultâneos", min: 1, max: 6, step: 1, unit: "" },
+  { key: "depthLayers", label: "Camadas 3D", min: 1, max: 5, step: 1, unit: " layers" },
 ];
 
 export function TrainingBuilder({ draft, onDraftChange, onSave }) {
@@ -29,8 +33,8 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
     <section className="panel builder">
       <div className="panel__header">
         <div>
-          <span className="eyebrow">Training Builder</span>
-          <h2>Crie seus próprios treinos</h2>
+          <span className="eyebrow">Map Builder</span>
+          <h2>Crie mapas 3D personalizados</h2>
         </div>
         <button className="ghost-button" onClick={handleReset}>
           Resetar
@@ -39,11 +43,11 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
 
       <div className="builder__grid">
         <label className="field">
-          <span>Nome</span>
+          <span>Nome do mapa</span>
           <input
             value={draft.name}
             onChange={(event) => handleChange("name", event.target.value)}
-            placeholder="Nome do treino"
+            placeholder="Nome do mapa"
           />
         </label>
 
@@ -53,7 +57,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
             rows="3"
             value={draft.description}
             onChange={(event) => handleChange("description", event.target.value)}
-            placeholder="O que este treino pratica?"
+            placeholder="Qual habilidade esse mapa treina?"
           />
         </label>
 
@@ -82,6 +86,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
         <div className="builder__scoring">
           {scoringOptions.map((option) => (
             <button
+              type="button"
               key={option.value}
               className={draft.scoring === option.value ? "score-chip score-chip--active" : "score-chip"}
               onClick={() => handleChange("scoring", option.value)}
@@ -91,15 +96,28 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
             </button>
           ))}
         </div>
+
+        <div className="builder__patterns">
+          {patternOptions.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              className={draft.pattern === option.value ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+              onClick={() => handleChange("pattern", option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="builder__footer">
         <p>
-          Dica: combine alvo pequeno com vida curta para treino de flick, ou aumente velocidade para
-          focar tracking.
+          Ajuste padrão, profundidade e objetivo de acertos para criar mapas curtos de flick ou arenas
+          longas de tracking em 3D.
         </p>
         <button className="primary-button" onClick={onSave}>
-          Salvar treino
+          Salvar mapa
         </button>
       </div>
     </section>

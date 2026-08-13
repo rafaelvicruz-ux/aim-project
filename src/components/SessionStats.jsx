@@ -1,9 +1,9 @@
-export function SessionStats({ stats, modeName, onBack }) {
+﻿export function SessionStats({ stats, modeName, onBack }) {
   return (
     <section className="panel session-stats">
       <div className="panel__header">
         <div>
-          <span className="eyebrow">Sessão Finalizada</span>
+          <span className="eyebrow">Mapa Finalizado</span>
           <h2>{modeName}</h2>
         </div>
         <button className="ghost-button" onClick={onBack}>
@@ -13,16 +13,28 @@ export function SessionStats({ stats, modeName, onBack }) {
 
       <div className="session-stats__grid">
         <article>
-          <span>Score</span>
-          <strong>{stats.score}</strong>
+          <span>Status</span>
+          <strong>{stats.completed ? "Concluído" : "Tempo esgotado"}</strong>
+        </article>
+        <article>
+          <span>Tempo gasto</span>
+          <strong>{stats.timeSpent}s</strong>
+        </article>
+        <article>
+          <span>Acertos</span>
+          <strong>{stats.hits}</strong>
+        </article>
+        <article>
+          <span>Objetivo</span>
+          <strong>{stats.goalHits}</strong>
         </article>
         <article>
           <span>Precisão</span>
           <strong>{stats.accuracy}%</strong>
         </article>
         <article>
-          <span>Acertos</span>
-          <strong>{stats.hits}</strong>
+          <span>Score</span>
+          <strong>{stats.score}</strong>
         </article>
         <article>
           <span>Erros</span>

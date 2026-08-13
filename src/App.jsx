@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { GameArena } from "./components/GameArena";
 import { ModeCard } from "./components/ModeCard";
 import { SessionStats } from "./components/SessionStats";
@@ -7,6 +7,7 @@ import { TrainingBuilder } from "./components/TrainingBuilder";
 import { customTemplate, defaultPresets } from "./data/presets";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
+const CUSTOM_MAPS_STORAGE_KEY = "aimforge-custom-maps";
 
 function buildSummary(rawStats) {
   const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
@@ -21,12 +22,27 @@ function buildSummary(rawStats) {
     misses: rawStats.misses,
     avgReaction,
     bestCombo: rawStats.bestCombo,
+    goalHits: rawStats.goalHits,
+    timeSpent: rawStats.timeSpent,
+    completed: rawStats.completed,
   };
 }
 
 export default function App() {
   const [customDraft, setCustomDraft] = useState(customTemplate);
-  const [customModes, setCustomModes] = useState([]);
+  const [customModes, setCustomModes] = useState(() => {
+    const savedModes = window.localStorage.getItem(CUSTOM_MAPS_STORAGE_KEY);
+
+    if (!savedModes) {
+      return [];
+    }
+
+    try {
+      return JSON.parse(savedModes);
+    } catch {
+      return [];
+    }
+  });
   const [activeMode, setActiveMode] = useState(null);
   const [lastSession, setLastSession] = useState(null);
   const [settings, setSettings] = useState(() => {
@@ -49,12 +65,16 @@ export default function App() {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
+  useEffect(() => {
+    window.localStorage.setItem(CUSTOM_MAPS_STORAGE_KEY, JSON.stringify(customModes));
+  }, [customModes]);
+
   const handleSaveCustomMode = () => {
     const nextMode = {
       ...customDraft,
       id: `custom-${Date.now()}`,
-      name: customDraft.name.trim() || "Meu treino",
-      description: customDraft.description.trim() || "Treino personalizado.",
+      name: customDraft.name.trim() || "Meu mapa 3D",
+      description: customDraft.description.trim() || "Mapa personalizado.",
     };
 
     setCustomModes((currentModes) => [nextMode, ...currentModes]);
@@ -68,37 +88,33 @@ export default function App() {
     setActiveMode(null);
   };
 
-  const handleExit = () => {
-    setActiveMode(null);
-  };
-
   if (activeMode) {
-    return <GameArena mode={activeMode} settings={settings} onFinish={handleFinish} onExit={handleExit} />;
+    return <GameArena mode={activeMode} settings={settings} onFinish={handleFinish} onExit={() => setActiveMode(null)} />;
   }
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div className="hero__content">
-          <span className="eyebrow">AimForge Prototype</span>
-          <h1>Treino de mira em React com presets e criador de rotinas.</h1>
+          <span className="eyebrow">AimForge 3D</span>
+          <h1>Treino de mira com mapas 3D, meta de acertos e criador de arenas.</h1>
           <p>
-            Uma base para evoluir em algo estilo Kovaaks, mas com identidade própria, feedback rápido
-            e uma área para montar exercícios sob medida.
+            Agora o jogo tem 47 mapas, FPS em primeira pessoa, inimigos 3D, objetivo por hits,
+            tempo para concluir e editor para criar novas rotas e padrões de combate.
           </p>
         </div>
 
         <div className="hero__badge">
-          <span>Focus</span>
-          <strong>Flick + Tracking + Custom Builder</strong>
+          <span>Status</span>
+          <strong>47 mapas + inimigos 3D + builder</strong>
         </div>
       </section>
 
       <section className="panel">
         <div className="panel__header">
           <div>
-            <span className="eyebrow">Play Modes</span>
-            <h2>Escolha um treino</h2>
+            <span className="eyebrow">Map Pool</span>
+            <h2>Escolha um mapa</h2>
           </div>
         </div>
 
