@@ -1,4 +1,4 @@
-﻿import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls, Sparkles, Stars } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -273,6 +273,92 @@ function Enemy({ enemy, registerEnemy }) {
   );
 }
 
+function Obstacle({ obstacle }) {
+  if (obstacle.type === "trash-can") {
+    return (
+      <group position={obstacle.position} rotation={obstacle.rotation ?? [0, 0, 0]} scale={obstacle.scale ?? 1}>
+        <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
+          <cylinderGeometry args={[0.5, 0.58, 1.7, 18]} />
+          <meshStandardMaterial color="#586271" metalness={0.45} roughness={0.48} />
+        </mesh>
+        <mesh castShadow receiveShadow position={[0, 1.84, 0]}>
+          <cylinderGeometry args={[0.56, 0.56, 0.12, 18]} />
+          <meshStandardMaterial color="#2a3340" metalness={0.38} roughness={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (obstacle.type === "truck") {
+    return (
+      <group position={obstacle.position} rotation={obstacle.rotation ?? [0, 0, 0]} scale={obstacle.scale ?? 1}>
+        <mesh castShadow receiveShadow position={[0, 1.1, 0]}>
+          <boxGeometry args={[4.8, 1.8, 2.2]} />
+          <meshStandardMaterial color="#b53c28" metalness={0.32} roughness={0.45} />
+        </mesh>
+        <mesh castShadow receiveShadow position={[1.75, 1.3, 0]}>
+          <boxGeometry args={[1.6, 2.1, 2]} />
+          <meshStandardMaterial color="#d96c2f" metalness={0.22} roughness={0.4} />
+        </mesh>
+        {[
+          [-1.5, 0.45, 1.05],
+          [-1.5, 0.45, -1.05],
+          [1.4, 0.45, 1.05],
+          [1.4, 0.45, -1.05],
+        ].map((wheel, index) => (
+          <mesh key={index} castShadow receiveShadow position={wheel} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.42, 0.42, 0.35, 18]} />
+            <meshStandardMaterial color="#171b22" metalness={0.25} roughness={0.7} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (obstacle.type === "rock") {
+    return (
+      <mesh
+        castShadow
+        receiveShadow
+        position={obstacle.position}
+        rotation={obstacle.rotation ?? [0, 0, 0]}
+        scale={obstacle.scale ?? 1}
+      >
+        <dodecahedronGeometry args={[1.3, 0]} />
+        <meshStandardMaterial color="#73706b" roughness={0.96} metalness={0.06} />
+      </mesh>
+    );
+  }
+
+  return (
+    <group position={obstacle.position} rotation={obstacle.rotation ?? [0, 0, 0]} scale={obstacle.scale ?? 1}>
+      <mesh castShadow receiveShadow position={[0, 0.85, 0]}>
+        <boxGeometry args={[1.8, 0.15, 1.2]} />
+        <meshStandardMaterial color="#7e5739" roughness={0.82} />
+      </mesh>
+      {[
+        [-0.75, 0.38, -0.45],
+        [0.75, 0.38, -0.45],
+        [-0.75, 0.38, 0.45],
+        [0.75, 0.38, 0.45],
+      ].map((leg, index) => (
+        <mesh key={index} castShadow receiveShadow position={leg}>
+          <boxGeometry args={[0.12, 0.8, 0.12]} />
+          <meshStandardMaterial color="#4c3522" roughness={0.88} />
+        </mesh>
+      ))}
+      <mesh castShadow receiveShadow position={[-1.1, 0.55, 0]}>
+        <boxGeometry args={[0.5, 1.1, 0.5]} />
+        <meshStandardMaterial color="#8d684b" roughness={0.84} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[-1.1, 1.15, -0.15]} rotation={[0.22, 0, 0]}>
+        <boxGeometry args={[0.5, 0.8, 0.1]} />
+        <meshStandardMaterial color="#8d684b" roughness={0.84} />
+      </mesh>
+    </group>
+  );
+}
+
 function HitBurst({ burst }) {
   return (
     <group position={[burst.x, burst.y + 1.2, burst.z]}>
@@ -307,7 +393,7 @@ function ArenaProps() {
   );
 }
 
-function FpsScene({ enemies, bursts, bindShooter, moveSpeed, sensitivity, shotPulse }) {
+function FpsScene({ enemies, bursts, obstacles, bindShooter, moveSpeed, sensitivity, shotPulse }) {
   const enemyObjectsRef = useRef(new Map());
   const { camera } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -383,7 +469,9 @@ function FpsScene({ enemies, bursts, bindShooter, moveSpeed, sensitivity, shotPu
       </mesh>
 
       <ArenaProps />
-
+      {obstacles.map((obstacle) => (
+        <Obstacle key={obstacle.id} obstacle={obstacle} />
+      ))}
       {enemies.map((enemy) => (
         <Enemy key={enemy.id} enemy={enemy} registerEnemy={registerEnemy} />
       ))}
@@ -583,7 +671,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
           <strong>{stats.hits}/{mode.goalHits}</strong>
         </article>
         <article>
-          <span>Precisão</span>
+          <span>Precis�o</span>
           <strong>{accuracy}%</strong>
         </article>
         <article>
@@ -605,6 +693,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
           <FpsScene
             enemies={enemies}
             bursts={bursts}
+            obstacles={mode.obstacles ?? []}
             moveSpeed={mode.moveSpeed}
             sensitivity={settings.sensitivity}
             shotPulse={shotPulse}

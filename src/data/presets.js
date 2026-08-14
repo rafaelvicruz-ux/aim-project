@@ -1,4 +1,6 @@
-﻿export const patternOptions = [
+﻿import { buildObstacleLayout } from "./gameConfig";
+
+export const patternOptions = [
   { value: "lane-sweep", label: "Lane Sweep" },
   { value: "orbit", label: "Orbit" },
   { value: "depth-pop", label: "Depth Pop" },
@@ -66,6 +68,13 @@ const mapNames = [
   "Final Drift",
 ];
 
+function obstacleSetForIndex(index) {
+  if (index % 7 === 0) return ["truck", "trash-can"];
+  if (index % 5 === 0) return ["rock", "furniture"];
+  if (index % 3 === 0) return ["trash-can"];
+  return [];
+}
+
 function createPreset(index, name) {
   const pattern = patternOptions[index % patternOptions.length].value;
   const tier = Math.floor(index / 12);
@@ -80,6 +89,7 @@ function createPreset(index, name) {
   const targetLifetime = 1200 + (index % 6) * 240;
   const spawnRate = Math.max(260, 780 - (index % 9) * 45 - tier * 30);
   const scoringCycle = ["precision", "combo", "tracking"];
+  const obstacleSet = obstacleSetForIndex(index);
 
   return {
     id: `map-${String(index + 1).padStart(2, "0")}`,
@@ -97,6 +107,8 @@ function createPreset(index, name) {
     depthLayers,
     strafeIntensity,
     verticalDrift,
+    obstacleSet,
+    obstacles: buildObstacleLayout(obstacleSet),
   };
 }
 
@@ -117,4 +129,6 @@ export const customTemplate = {
   depthLayers: 3,
   strafeIntensity: 40,
   verticalDrift: 24,
+  obstacleSet: ["trash-can", "rock"],
+  obstacles: buildObstacleLayout(["trash-can", "rock"]),
 };

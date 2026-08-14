@@ -1,4 +1,4 @@
-Ôªøimport { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GameArena } from "./components/GameArena";
 import { AuthPanel } from "./components/AuthPanel";
 import { ModeCard } from "./components/ModeCard";
@@ -6,6 +6,7 @@ import { SessionStats } from "./components/SessionStats";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TrainingBuilder } from "./components/TrainingBuilder";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
+import { musicTracks } from "./data/gameConfig";
 import { customTemplate, defaultPresets } from "./data/presets";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
@@ -13,8 +14,8 @@ const RANK_STORAGE_KEY = "aimforge-rank-state";
 
 const ranks = [
   { id: "bronze", label: "Bronze", skill: 0, badge: "Entrada" },
-  { id: "silver", label: "Silver", skill: 1, badge: "Base s√≥lida" },
-  { id: "gold", label: "Gold", skill: 2, badge: "Boa precis√£o" },
+  { id: "silver", label: "Silver", skill: 1, badge: "Base sÛlida" },
+  { id: "gold", label: "Gold", skill: 2, badge: "Boa precis„o" },
   { id: "platinum", label: "Platinum", skill: 3, badge: "Controle forte" },
   { id: "diamond", label: "Diamond", skill: 4, badge: "Elite" },
   { id: "master", label: "Master", skill: 5, badge: "Predador" },
@@ -47,6 +48,8 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [authMessage, setAuthMessage] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const audioRef = useRef(null);
   const [rankState, setRankState] = useState(() => {
     const savedRank = window.localStorage.getItem(RANK_STORAGE_KEY);
 
@@ -62,15 +65,20 @@ export default function App() {
   });
   const [settings, setSettings] = useState(() => {
     const savedSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const defaults = {
+      sensitivity: 1,
+      musicTrack: musicTracks[0]?.id ?? "escape-love",
+      musicVolume: 0.45,
+    };
 
     if (!savedSettings) {
-      return { sensitivity: 1 };
+      return defaults;
     }
 
     try {
-      return JSON.parse(savedSettings);
+      return { ...defaults, ...JSON.parse(savedSettings) };
     } catch {
-      return { sensitivity: 1 };
+      return defaults;
     }
   });
 
@@ -84,6 +92,30 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(rankState));
   }, [rankState]);
+
+  useEffect(() => {
+    const selectedTrack = musicTracks.find((track) => track.id === settings.musicTrack) ?? musicTracks[0];
+
+    if (!selectedTrack) {
+      return undefined;
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    const audio = new Audio(selectedTrack.src);
+    audio.loop = true;
+    audio.volume = settings.musicVolume;
+    audioRef.current = audio;
+    audio.play().catch(() => {});
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, [settings.musicTrack, settings.musicVolume]);
 
   useEffect(() => {
     if (!supabase) {
@@ -123,7 +155,7 @@ export default function App() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        setAuthMessage(error.message);
+        setSaveMessage(error.message);
         return;
       }
 
@@ -191,9 +223,9 @@ export default function App() {
     setActiveMode(applyRankDifficulty(mode));
   };
 
-  const handleSaveCustomMode = () => {
+  const handleSaveCustomMode = async () => {
     if (!supabase || !session?.user) {
-      setAuthMessage("Entre na sua conta para salvar mapas no Supabase.");
+      setSaveMessage("Entre na sua conta para salvar mapas no Supabase.");
       return;
     }
 
@@ -203,7 +235,7 @@ export default function App() {
       description: customDraft.description.trim() || "Mapa personalizado.",
     };
 
-    supabase
+    const { data, error } = await supabase
       .from("custom_maps")
       .insert({
         user_id: session.user.id,
@@ -212,35 +244,31 @@ export default function App() {
         config: nextMode,
       })
       .select("id")
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          setAuthMessage(error.message);
-          return;
-        }
+      .single();
 
-        setCustomModes((currentModes) => [{ ...nextMode, id: data.id, creatorId: session.user.id }, ...currentModes]);
-        setAuthMessage("Mapa salvo com sucesso.");
-      });
+    if (error) {
+      setSaveMessage(error.message);
+      return;
+    }
+
+    setCustomModes((currentModes) => [{ ...nextMode, id: data.id, creatorId: session.user.id }, ...currentModes]);
+    setSaveMessage("Mapa salvo com sucesso.");
   };
 
-  const handleDeleteCustomMode = (modeId) => {
+  const handleDeleteCustomMode = async (modeId) => {
     if (!supabase || !session?.user) {
       return;
     }
 
-    supabase
-      .from("custom_maps")
-      .delete()
-      .eq("id", modeId)
-      .then(({ error }) => {
-        if (error) {
-          setAuthMessage(error.message);
-          return;
-        }
+    const { error } = await supabase.from("custom_maps").delete().eq("id", modeId);
 
-        setCustomModes((currentModes) => currentModes.filter((mode) => mode.id !== modeId));
-      });
+    if (error) {
+      setSaveMessage(error.message);
+      return;
+    }
+
+    setCustomModes((currentModes) => currentModes.filter((mode) => mode.id !== modeId));
+    setSaveMessage("Mapa deletado.");
   };
 
   const handleFinish = (rawStats) => {
@@ -262,7 +290,7 @@ export default function App() {
       password: authForm.password,
     });
 
-    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se o projeto exigir confirma√ß√£o.");
+    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se o projeto exigir confirmaÁ„o.");
   };
 
   const handleSignIn = async () => {
@@ -284,7 +312,7 @@ export default function App() {
     }
 
     const { error } = await supabase.auth.signOut();
-    setAuthMessage(error ? error.message : "Sess√£o encerrada.");
+    setAuthMessage(error ? error.message : "Sess„o encerrada.");
   };
 
   if (activeMode) {
@@ -298,8 +326,8 @@ export default function App() {
           <span className="eyebrow">AimForge 3D</span>
           <h1>Treino de mira com mapas 3D, meta de acertos e criador de arenas.</h1>
           <p>
-            Agora o jogo tem 47 mapas, FPS em primeira pessoa, inimigos 3D, objetivo por hits,
-            tempo para concluir e editor para criar novas rotas e padr√µes de combate.
+            Agora o jogo tem 47 mapas, FPS em primeira pessoa, inimigos 3D, objetivo por hits, tempo
+            para concluir, trilhas na pasta music e editor para criar novas rotas com obst·culos.
           </p>
         </div>
 
@@ -323,13 +351,13 @@ export default function App() {
             <span className="eyebrow">Rank ativo</span>
             <strong className="creator-id">{activeRank.label}</strong>
             <p>
-              Precis√£o alta e mapas conclu√≠dos sobem o rank. Precis√£o ruim e falhas repetidas reduzem
+              Precis„o alta e mapas concluÌdos sobem o rank. Precis„o ruim e falhas repetidas reduzem
               a dificuldade automaticamente.
             </p>
           </article>
 
           <article className="settings-card">
-            <span className="eyebrow">Tend√™ncia atual</span>
+            <span className="eyebrow">TendÍncia atual</span>
             <strong className="creator-id">{rankState.performanceScore}</strong>
             <p>
               Quanto maior esse valor, mais agressivo fica o spawn, a velocidade dos inimigos e a meta
@@ -370,9 +398,15 @@ export default function App() {
         </div>
       </section>
 
-      <SettingsPanel settings={settings} onSettingsChange={setSettings} />
+      <SettingsPanel settings={settings} onSettingsChange={setSettings} musicTracks={musicTracks} />
 
-      <TrainingBuilder draft={customDraft} onDraftChange={setCustomDraft} onSave={handleSaveCustomMode} />
+      <TrainingBuilder
+        draft={customDraft}
+        onDraftChange={setCustomDraft}
+        onSave={handleSaveCustomMode}
+        canSave={Boolean(session?.user)}
+        saveMessage={saveMessage}
+      />
 
       {lastSession && (
         <SessionStats

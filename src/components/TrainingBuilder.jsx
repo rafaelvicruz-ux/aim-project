@@ -1,4 +1,5 @@
-﻿import { customTemplate, patternOptions } from "../data/presets";
+﻿import { buildObstacleLayout, obstacleTypes } from "../data/gameConfig";
+import { customTemplate, patternOptions } from "../data/presets";
 
 const scoringOptions = [
   { value: "precision", label: "Precision", help: "Score focado em acerto limpo e estável." },
@@ -19,7 +20,7 @@ const rangeFields = [
   { key: "depthLayers", label: "Camadas 3D", min: 1, max: 5, step: 1, unit: " layers" },
 ];
 
-export function TrainingBuilder({ draft, onDraftChange, onSave }) {
+export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMessage }) {
   const handleChange = (key, value) => {
     onDraftChange({
       ...draft,
@@ -28,6 +29,18 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
   };
 
   const handleReset = () => onDraftChange(customTemplate);
+
+  const handleObstacleToggle = (obstacleId) => {
+    const nextObstacleSet = draft.obstacleSet.includes(obstacleId)
+      ? draft.obstacleSet.filter((item) => item !== obstacleId)
+      : [...draft.obstacleSet, obstacleId];
+
+    onDraftChange({
+      ...draft,
+      obstacleSet: nextObstacleSet,
+      obstacles: buildObstacleLayout(nextObstacleSet),
+    });
+  };
 
   return (
     <section className="panel builder">
@@ -109,17 +122,35 @@ export function TrainingBuilder({ draft, onDraftChange, onSave }) {
             </button>
           ))}
         </div>
+
+        <div className="builder__patterns">
+          {obstacleTypes.map((obstacle) => (
+            <button
+              type="button"
+              key={obstacle.id}
+              className={
+                draft.obstacleSet.includes(obstacle.id)
+                  ? "pattern-chip pattern-chip--active"
+                  : "pattern-chip"
+              }
+              onClick={() => handleObstacleToggle(obstacle.id)}
+            >
+              {obstacle.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="builder__footer">
         <p>
           Ajuste padrão, profundidade e objetivo de acertos para criar mapas curtos de flick ou arenas
-          longas de tracking em 3D.
+          longas de tracking em 3D. Você também pode adicionar lixeira, caminhão, pedra e móveis.
         </p>
-        <button className="primary-button" onClick={onSave}>
-          Salvar mapa
+        <button className="primary-button" onClick={onSave} disabled={!canSave}>
+          {canSave ? "Salvar mapa" : "Entre para salvar"}
         </button>
       </div>
+      {saveMessage ? <p className="builder__status">{saveMessage}</p> : null}
     </section>
   );
 }

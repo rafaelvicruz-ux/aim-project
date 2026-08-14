@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   font-family: "Space Grotesk", sans-serif;
   color: #f4efe6;
   background:
@@ -499,3 +499,9 @@ input[type="range"] {
     bottom: 16px;
   }
 }
+
+.builder__status {
+  margin: 12px 0 0;
+  color: #d9e4f7;
+}
+
