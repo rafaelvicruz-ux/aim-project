@@ -29,6 +29,10 @@
           <dt>Padrão</dt>
           <dd>{mode.pattern}</dd>
         </div>
+        <div>
+          <dt>Rank</dt>
+          <dd>{mode.difficultyLabel ?? "Base"}</dd>
+        </div>
       </dl>
     </button>
   );

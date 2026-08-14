@@ -85,7 +85,8 @@ button {
 .settings-card p,
 .builder__footer p,
 .mode-card p,
-.score-chip span {
+.score-chip span,
+.hero__rank-note {
   color: var(--text-muted);
 }
 
@@ -121,6 +122,11 @@ button {
   display: block;
   margin-top: 10px;
   font-size: 1.35rem;
+}
+
+.hero__rank-note {
+  display: block;
+  margin-top: 8px;
 }
 
 .panel,
@@ -249,7 +255,7 @@ button {
 }
 
 .mode-card__stats {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 20px 0 0;
 }
 

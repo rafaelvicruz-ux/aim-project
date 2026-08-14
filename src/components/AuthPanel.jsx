@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 
 export function AuthPanel({
   session,
@@ -13,33 +13,7 @@ export function AuthPanel({
   const [authMode, setAuthMode] = useState("signin");
 
   if (!isConfigured) {
-    return (
-      <section className="panel panel--creator">
-        <div className="panel__header">
-          <div>
-            <span className="eyebrow">Supabase Setup</span>
-            <h2>Conecte o projeto ao Supabase</h2>
-          </div>
-        </div>
-
-        <div className="creator-grid">
-          <article className="settings-card">
-            <p>
-              Adicione `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no `.env` do projeto para ativar
-              login e projetos por usuário.
-            </p>
-            <strong className="creator-id">Arquivo: `.env.example`</strong>
-          </article>
-
-          <article className="settings-card">
-            <p>
-              Depois rode o SQL de `supabase-schema.sql` no painel do Supabase para criar a tabela
-              `custom_maps` com segurança por usuário.
-            </p>
-          </article>
-        </div>
-      </section>
-    );
+    return null;
   }
 
   if (session?.user) {
@@ -65,7 +39,7 @@ export function AuthPanel({
           <article className="settings-card">
             <span className="eyebrow">Privacidade</span>
             <p>
-              A leitura, criação e exclusão dos mapas customizados agora usa `user_id` no Supabase com
+              A leitura, criação e exclusão dos mapas customizados usa `user_id` no Supabase com
               políticas por usuário.
             </p>
           </article>

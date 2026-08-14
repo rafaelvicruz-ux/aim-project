@@ -9,6 +9,16 @@ import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { customTemplate, defaultPresets } from "./data/presets";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
+const RANK_STORAGE_KEY = "aimforge-rank-state";
+
+const ranks = [
+  { id: "bronze", label: "Bronze", skill: 0, badge: "Entrada" },
+  { id: "silver", label: "Silver", skill: 1, badge: "Base sólida" },
+  { id: "gold", label: "Gold", skill: 2, badge: "Boa precisão" },
+  { id: "platinum", label: "Platinum", skill: 3, badge: "Controle forte" },
+  { id: "diamond", label: "Diamond", skill: 4, badge: "Elite" },
+  { id: "master", label: "Master", skill: 5, badge: "Predador" },
+];
 
 function buildSummary(rawStats) {
   const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
@@ -37,6 +47,19 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [authMessage, setAuthMessage] = useState("");
+  const [rankState, setRankState] = useState(() => {
+    const savedRank = window.localStorage.getItem(RANK_STORAGE_KEY);
+
+    if (!savedRank) {
+      return { rankIndex: 0, performanceScore: 0 };
+    }
+
+    try {
+      return JSON.parse(savedRank);
+    } catch {
+      return { rankIndex: 0, performanceScore: 0 };
+    }
+  });
   const [settings, setSettings] = useState(() => {
     const savedSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
 
@@ -50,11 +73,17 @@ export default function App() {
       return { sensitivity: 1 };
     }
   });
+
+  const activeRank = ranks[Math.min(rankState.rankIndex, ranks.length - 1)];
   const allModes = useMemo(() => [...defaultPresets, ...customModes], [customModes]);
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(rankState));
+  }, [rankState]);
 
   useEffect(() => {
     if (!supabase) {
@@ -112,6 +141,56 @@ export default function App() {
     loadMaps();
   }, [session]);
 
+  const applyRankDifficulty = (mode) => {
+    const rankBoost = activeRank.skill;
+
+    return {
+      ...mode,
+      difficultyLabel: activeRank.label,
+      spawnRate: Math.max(180, mode.spawnRate - rankBoost * 28),
+      moveSpeed: mode.moveSpeed + rankBoost * 14,
+      strafeIntensity: mode.strafeIntensity + rankBoost * 8,
+      verticalDrift: mode.verticalDrift + rankBoost * 4,
+      targetLifetime: Math.max(500, mode.targetLifetime - rankBoost * 80),
+      goalHits: mode.goalHits + rankBoost * 2,
+      simultaneousTargets: Math.min(6, mode.simultaneousTargets + (rankBoost >= 3 ? 1 : 0)),
+    };
+  };
+
+  const updateAdaptiveRank = (rawStats) => {
+    const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
+    const completionBonus = rawStats.completed ? 12 : -10;
+    const accuracyDelta = accuracy >= 88 ? 10 : accuracy >= 75 ? 4 : accuracy < 55 ? -8 : -2;
+    const comboDelta = rawStats.bestCombo >= 8 ? 4 : 0;
+    const totalDelta = completionBonus + accuracyDelta + comboDelta;
+
+    setRankState((current) => {
+      let nextPerformance = current.performanceScore + totalDelta;
+      let nextRankIndex = current.rankIndex;
+
+      while (nextPerformance >= 20 && nextRankIndex < ranks.length - 1) {
+        nextPerformance -= 20;
+        nextRankIndex += 1;
+      }
+
+      while (nextPerformance <= -20 && nextRankIndex > 0) {
+        nextPerformance += 20;
+        nextRankIndex -= 1;
+      }
+
+      nextPerformance = Math.max(-19, Math.min(19, nextPerformance));
+
+      return {
+        rankIndex: nextRankIndex,
+        performanceScore: nextPerformance,
+      };
+    });
+  };
+
+  const handleStartMode = (mode) => {
+    setActiveMode(applyRankDifficulty(mode));
+  };
+
   const handleSaveCustomMode = () => {
     if (!supabase || !session?.user) {
       setAuthMessage("Entre na sua conta para salvar mapas no Supabase.");
@@ -165,6 +244,7 @@ export default function App() {
   };
 
   const handleFinish = (rawStats) => {
+    updateAdaptiveRank(rawStats);
     setLastSession({
       modeName: activeMode.name,
       stats: buildSummary(rawStats),
@@ -224,8 +304,38 @@ export default function App() {
         </div>
 
         <div className="hero__badge">
-          <span>Status</span>
-          <strong>47 mapas + inimigos 3D + builder</strong>
+          <span>Rank Atual</span>
+          <strong>{activeRank.label}</strong>
+          <span className="hero__rank-note">{activeRank.badge}</span>
+        </div>
+      </section>
+
+      <section className="panel panel--rank">
+        <div className="panel__header">
+          <div>
+            <span className="eyebrow">Adaptive Rank</span>
+            <h2>Dificuldade que reage ao seu desempenho</h2>
+          </div>
+        </div>
+
+        <div className="creator-grid">
+          <article className="settings-card">
+            <span className="eyebrow">Rank ativo</span>
+            <strong className="creator-id">{activeRank.label}</strong>
+            <p>
+              Precisão alta e mapas concluídos sobem o rank. Precisão ruim e falhas repetidas reduzem
+              a dificuldade automaticamente.
+            </p>
+          </article>
+
+          <article className="settings-card">
+            <span className="eyebrow">Tendência atual</span>
+            <strong className="creator-id">{rankState.performanceScore}</strong>
+            <p>
+              Quanto maior esse valor, mais agressivo fica o spawn, a velocidade dos inimigos e a meta
+              do mapa.
+            </p>
+          </article>
         </div>
       </section>
 
@@ -252,8 +362,8 @@ export default function App() {
           {allModes.map((mode) => (
             <ModeCard
               key={mode.id}
-              mode={mode}
-              onStart={setActiveMode}
+              mode={applyRankDifficulty(mode)}
+              onStart={handleStartMode}
               onDelete={mode.creatorId === session?.user?.id ? handleDeleteCustomMode : undefined}
             />
           ))}
