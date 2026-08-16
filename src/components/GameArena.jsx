@@ -2,6 +2,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls, Sparkles, Stars } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { getArenaPrefab, getSpawnPreset } from "../data/gameConfig";
 
 const WORLD_LIMIT = 34;
 const PLAYER_HEIGHT = 1.7;
@@ -11,22 +12,52 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
+function resolveSpawnConfig(mode) {
+  const preset = getSpawnPreset(mode.spawnPreset);
+
+  if (mode.spawnNodes?.length) {
+    return {
+      spread: preset.spread ?? 2,
+      anchors: mode.spawnNodes.map((node) => ({
+        position: node.position,
+        height: node.height ?? 1.7,
+      })),
+    };
+  }
+
+  return {
+    spread: preset.spread ?? 2,
+    anchors: preset.anchors.map((anchor) => ({
+      position: [anchor[0], 0, anchor[2]],
+      height: randomBetween(preset.heightRange[0], preset.heightRange[1]),
+    })),
+  };
+}
+
 function spawnEnemy(mode, now) {
-  const angle = Math.random() * Math.PI * 2;
-  const radius = randomBetween(10, 28);
-  const baseHeight = randomBetween(1.1, 2.2);
+  const spawnConfig = resolveSpawnConfig(mode);
+  const anchor = spawnConfig.anchors[Math.floor(Math.random() * spawnConfig.anchors.length)] ?? {
+    position: [0, 0, -22],
+    height: 1.7,
+  };
+  const spread = spawnConfig.spread ?? 3;
+  const baseX = anchor.position[0] + randomBetween(-spread, spread);
+  const baseZ = anchor.position[2] + randomBetween(-spread, spread);
+  const baseHeight = anchor.height ?? 1.7;
   const direction = Math.random() > 0.5 ? 1 : -1;
+  const angle = Math.atan2(baseZ, baseX);
+  const radius = Math.max(8, Math.sqrt(baseX * baseX + baseZ * baseZ));
 
   return {
     id: `${now}-${Math.random().toString(16).slice(2)}`,
     bornAt: now,
     expiresAt: now + mode.targetLifetime,
-    x: Math.cos(angle) * radius,
+    x: baseX,
     y: baseHeight,
-    z: Math.sin(angle) * radius,
-    baseX: Math.cos(angle) * radius,
+    z: baseZ,
+    baseX,
     baseY: baseHeight,
-    baseZ: Math.sin(angle) * radius,
+    baseZ,
     angle,
     radius,
     direction,
@@ -96,7 +127,7 @@ function updateEnemy(enemy, mode, elapsedSeconds, deltaSeconds) {
   return {
     ...enemy,
     x: THREE.MathUtils.clamp(x, -WORLD_LIMIT, WORLD_LIMIT),
-    y: THREE.MathUtils.clamp(y, 0.9, 4),
+    y: THREE.MathUtils.clamp(y, 0.9, 4.2),
     z: THREE.MathUtils.clamp(z, -WORLD_LIMIT, WORLD_LIMIT),
     angle,
     radius,
@@ -232,7 +263,7 @@ function PlayerRig({ speed, sensitivity }) {
   return <PointerLockControls ref={controlsRef} selector="#fps-lock-button" pointerSpeed={sensitivity} />;
 }
 
-function Enemy({ enemy, registerEnemy }) {
+function Enemy({ enemy, registerEnemy, scale }) {
   const groupRef = useRef(null);
 
   useEffect(() => {
@@ -250,16 +281,10 @@ function Enemy({ enemy, registerEnemy }) {
   }, [enemy.id, registerEnemy]);
 
   return (
-    <group ref={groupRef} position={[enemy.x, enemy.y, enemy.z]}>
+    <group ref={groupRef} position={[enemy.x, enemy.y, enemy.z]} scale={scale}>
       <mesh castShadow position={[0, 1.2, 0]}>
         <capsuleGeometry args={[0.45, 1.3, 6, 12]} />
-        <meshStandardMaterial
-          color="#ff6d3a"
-          emissive="#3a0f00"
-          emissiveIntensity={0.35}
-          roughness={0.45}
-          metalness={0.15}
-        />
+        <meshStandardMaterial color="#ff6d3a" emissive="#3a0f00" emissiveIntensity={0.35} roughness={0.45} metalness={0.15} />
       </mesh>
       <mesh castShadow position={[0, 2.35, 0]}>
         <sphereGeometry args={[0.34, 18, 18]} />
@@ -317,13 +342,7 @@ function Obstacle({ obstacle }) {
 
   if (obstacle.type === "rock") {
     return (
-      <mesh
-        castShadow
-        receiveShadow
-        position={obstacle.position}
-        rotation={obstacle.rotation ?? [0, 0, 0]}
-        scale={obstacle.scale ?? 1}
-      >
+      <mesh castShadow receiveShadow position={obstacle.position} rotation={obstacle.rotation ?? [0, 0, 0]} scale={obstacle.scale ?? 1}>
         <dodecahedronGeometry args={[1.3, 0]} />
         <meshStandardMaterial color="#73706b" roughness={0.96} metalness={0.06} />
       </mesh>
@@ -370,7 +389,58 @@ function HitBurst({ burst }) {
   );
 }
 
-function ArenaProps() {
+function ArenaProps({ arenaPrefab }) {
+  if (arenaPrefab === "dock-lanes") {
+    return (
+      <>
+        {[-18, 18].map((x) => (
+          <mesh key={`dock-wall-${x}`} position={[x, 2.4, -6]} castShadow receiveShadow>
+            <boxGeometry args={[2.8, 4.8, 16]} />
+            <meshStandardMaterial color="#2d374d" metalness={0.18} roughness={0.76} />
+          </mesh>
+        ))}
+        <mesh position={[0, 1.2, 12]} castShadow receiveShadow>
+          <boxGeometry args={[14, 2.4, 3]} />
+          <meshStandardMaterial color="#253247" roughness={0.72} />
+        </mesh>
+      </>
+    );
+  }
+
+  if (arenaPrefab === "vertical-core") {
+    return (
+      <>
+        {[-14, 0, 14].map((x) => (
+          <mesh key={`tower-${x}`} position={[x, 5.4, -10]} castShadow receiveShadow>
+            <cylinderGeometry args={[1.8, 1.8, 10.8, 20]} />
+            <meshStandardMaterial color="#1d2b45" metalness={0.28} roughness={0.68} />
+          </mesh>
+        ))}
+        <mesh position={[0, 2.8, 16]} castShadow receiveShadow>
+          <boxGeometry args={[10, 5.6, 2.5]} />
+          <meshStandardMaterial color="#22314b" roughness={0.74} />
+        </mesh>
+      </>
+    );
+  }
+
+  if (arenaPrefab === "crossfire-yard") {
+    return (
+      <>
+        <mesh position={[0, 1.5, -8]} castShadow receiveShadow>
+          <boxGeometry args={[6.5, 3, 6.5]} />
+          <meshStandardMaterial color="#26364f" roughness={0.78} />
+        </mesh>
+        {[-18, 18].map((x) => (
+          <mesh key={`cross-box-${x}`} position={[x, 1.2, 12]} castShadow receiveShadow>
+            <boxGeometry args={[4, 2.4, 4]} />
+            <meshStandardMaterial color="#33445c" roughness={0.72} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+
   return (
     <>
       {[-20, 0, 20].map((x) => (
@@ -393,11 +463,13 @@ function ArenaProps() {
   );
 }
 
-function FpsScene({ enemies, bursts, obstacles, bindShooter, moveSpeed, sensitivity, shotPulse }) {
+function FpsScene({ enemies, bursts, obstacles, bindShooter, mode, sensitivity, shotPulse }) {
   const enemyObjectsRef = useRef(new Map());
   const { camera } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const center = useMemo(() => new THREE.Vector2(0, 0), []);
+  const arenaStyle = getArenaPrefab(mode.arenaPrefab);
+  const enemyScale = Math.max(0.55, (mode.targetSize ?? 40) / 40);
 
   const registerEnemy = (id, object) => {
     if (object) {
@@ -433,47 +505,41 @@ function FpsScene({ enemies, bursts, obstacles, bindShooter, moveSpeed, sensitiv
       <color attach="background" args={["#05070d"]} />
       <fog attach="fog" args={["#070b14", 22, 76]} />
       <Stars radius={120} depth={42} count={2000} factor={4} saturation={0} fade speed={0.5} />
-      <Sparkles count={36} scale={[80, 20, 80]} size={4} speed={0.35} color="#7eb8ff" />
+      <Sparkles count={36} scale={[80, 20, 80]} size={4} speed={0.35} color={arenaStyle.accentColor} />
       <ambientLight intensity={0.9} />
-      <directionalLight
-        position={[8, 16, 6]}
-        intensity={1.55}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
-      <spotLight position={[-10, 18, -6]} intensity={42} angle={0.35} penumbra={0.5} color="#76b6ff" />
+      <directionalLight position={[8, 16, 6]} intensity={1.55} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+      <spotLight position={[-10, 18, -6]} intensity={42} angle={0.35} penumbra={0.5} color={arenaStyle.accentColor} />
       <pointLight position={[0, 6, -14]} intensity={14} color="#ff7d2d" distance={20} />
       <pointLight position={[0, 8, 18]} intensity={10} color="#65b4ff" distance={24} />
-      <PlayerRig speed={PLAYER_SPEED + moveSpeed * 0.01} sensitivity={sensitivity} />
+      <PlayerRig speed={PLAYER_SPEED + mode.moveSpeed * 0.01} sensitivity={sensitivity} />
       <WeaponViewModel shotPulse={shotPulse} />
 
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[90, 90, 30, 30]} />
-        <meshStandardMaterial color="#121c2d" roughness={0.95} metalness={0.05} />
+        <meshStandardMaterial color={arenaStyle.floorColor} roughness={0.95} metalness={0.05} />
       </mesh>
 
-      <gridHelper args={[90, 45, "#2d6cff", "#233148"]} position={[0, 0.01, 0]} />
+      <gridHelper args={[90, 45, arenaStyle.accentColor, "#233148"]} position={[0, 0.01, 0]} />
 
       <mesh position={[0, 16, -38]} receiveShadow>
         <boxGeometry args={[90, 32, 2]} />
-        <meshStandardMaterial color="#0d1526" emissive="#12253e" emissiveIntensity={0.2} />
+        <meshStandardMaterial color={arenaStyle.wallColor} emissive="#12253e" emissiveIntensity={0.2} />
       </mesh>
       <mesh position={[38, 12, 0]} receiveShadow>
         <boxGeometry args={[2, 24, 90]} />
-        <meshStandardMaterial color="#0d1526" />
+        <meshStandardMaterial color={arenaStyle.wallColor} />
       </mesh>
       <mesh position={[-38, 12, 0]} receiveShadow>
         <boxGeometry args={[2, 24, 90]} />
-        <meshStandardMaterial color="#0d1526" />
+        <meshStandardMaterial color={arenaStyle.wallColor} />
       </mesh>
 
-      <ArenaProps />
+      <ArenaProps arenaPrefab={mode.arenaPrefab} />
       {obstacles.map((obstacle) => (
         <Obstacle key={obstacle.id} obstacle={obstacle} />
       ))}
       {enemies.map((enemy) => (
-        <Enemy key={enemy.id} enemy={enemy} registerEnemy={registerEnemy} />
+        <Enemy key={enemy.id} enemy={enemy} registerEnemy={registerEnemy} scale={enemyScale} />
       ))}
       {bursts.map((burst) => (
         <HitBurst key={burst.id} burst={burst} />
@@ -487,15 +553,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
   const [enemies, setEnemies] = useState([]);
   const [bursts, setBursts] = useState([]);
   const [shotPulse, setShotPulse] = useState(0);
-  const [stats, setStats] = useState({
-    score: 0,
-    shots: 0,
-    hits: 0,
-    misses: 0,
-    combo: 0,
-    bestCombo: 0,
-    reactionTimes: [],
-  });
+  const [stats, setStats] = useState({ score: 0, shots: 0, hits: 0, misses: 0, combo: 0, bestCombo: 0, reactionTimes: [] });
 
   const lastSpawnAtRef = useRef(0);
   const rafRef = useRef(0);
@@ -543,9 +601,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
       setTimeLeft(Number((remainingMs / 1000).toFixed(1)));
 
       setEnemies((currentEnemies) => {
-        let nextEnemies = currentEnemies
-          .filter((enemy) => enemy.expiresAt > now)
-          .map((enemy) => updateEnemy(enemy, mode, elapsedSeconds, 1 / 60));
+        let nextEnemies = currentEnemies.filter((enemy) => enemy.expiresAt > now).map((enemy) => updateEnemy(enemy, mode, elapsedSeconds, 1 / 60));
 
         while (
           now - lastSpawnAtRef.current >= mode.spawnRate &&
@@ -560,11 +616,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         return nextEnemies;
       });
 
-      setBursts((currentBursts) =>
-        currentBursts
-          .map((burst) => ({ ...burst, life: burst.life - 1 / 20 }))
-          .filter((burst) => burst.life > 0),
-      );
+      setBursts((currentBursts) => currentBursts.map((burst) => ({ ...burst, life: burst.life - 1 / 20 })).filter((burst) => burst.life > 0));
 
       if (statsRef.current.hits >= mode.goalHits) {
         finalize(true, remainingMs);
@@ -593,12 +645,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
       const enemyId = shooterRef.current();
 
       if (!enemyId) {
-        setStats((currentStats) => ({
-          ...currentStats,
-          shots: currentStats.shots + 1,
-          misses: currentStats.misses + 1,
-          combo: 0,
-        }));
+        setStats((currentStats) => ({ ...currentStats, shots: currentStats.shots + 1, misses: currentStats.misses + 1, combo: 0 }));
         return;
       }
 
@@ -622,17 +669,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
           };
         });
 
-        setBursts((currentBursts) => [
-          ...currentBursts,
-          {
-            id: `${enemyId}-burst`,
-            x: target.x,
-            y: target.y,
-            z: target.z,
-            life: 1,
-          },
-        ]);
-
+        setBursts((currentBursts) => [...currentBursts, { id: `${enemyId}-burst`, x: target.x, y: target.y, z: target.z, life: 1 }]);
         return currentEnemies.filter((enemy) => enemy.id !== enemyId);
       });
     };
@@ -641,13 +678,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
     return () => window.removeEventListener("mousedown", handleMouseDown);
   }, [mode]);
 
-  const accuracy = useMemo(() => {
-    if (!stats.shots) {
-      return 100;
-    }
-
-    return Math.round((stats.hits / stats.shots) * 100);
-  }, [stats.hits, stats.shots]);
+  const accuracy = useMemo(() => (stats.shots ? Math.round((stats.hits / stats.shots) * 100) : 100), [stats.hits, stats.shots]);
 
   return (
     <section className="arena-shell">
@@ -662,30 +693,12 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
       </header>
 
       <div className="arena-shell__hud">
-        <article>
-          <span>Tempo</span>
-          <strong>{timeLeft}s</strong>
-        </article>
-        <article>
-          <span>Acertos</span>
-          <strong>{stats.hits}/{mode.goalHits}</strong>
-        </article>
-        <article>
-          <span>Precisão</span>
-          <strong>{accuracy}%</strong>
-        </article>
-        <article>
-          <span>Score</span>
-          <strong>{stats.score}</strong>
-        </article>
-        <article>
-          <span>Combo</span>
-          <strong>x{stats.combo}</strong>
-        </article>
-        <article>
-          <span>Sens</span>
-          <strong>{settings.sensitivity.toFixed(2)}x</strong>
-        </article>
+        <article><span>Tempo</span><strong>{timeLeft}s</strong></article>
+        <article><span>Acertos</span><strong>{stats.hits}/{mode.goalHits}</strong></article>
+        <article><span>Precisão</span><strong>{accuracy}%</strong></article>
+        <article><span>Score</span><strong>{stats.score}</strong></article>
+        <article><span>Combo</span><strong>x{stats.combo}</strong></article>
+        <article><span>Sens</span><strong>{settings.sensitivity.toFixed(2)}x</strong></article>
       </div>
 
       <div className="arena arena--3d-fps">
@@ -694,7 +707,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
             enemies={enemies}
             bursts={bursts}
             obstacles={mode.obstacles ?? []}
-            moveSpeed={mode.moveSpeed}
+            mode={mode}
             sensitivity={settings.sensitivity}
             shotPulse={shotPulse}
             bindShooter={(fn) => {
@@ -704,9 +717,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         </Canvas>
         <div className={shotPulse ? "crosshair crosshair--fps crosshair--active" : "crosshair crosshair--fps"} />
         <div className="arena__overlay">
-          <button id="fps-lock-button" className="primary-button" type="button">
-            Entrar no mapa
-          </button>
+          <button id="fps-lock-button" className="primary-button" type="button">Entrar no mapa</button>
           <p className="arena__helper">WASD para mover, mouse para mirar, clique para atirar.</p>
         </div>
       </div>
