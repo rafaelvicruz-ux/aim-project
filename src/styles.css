@@ -1,20 +1,23 @@
 :root {
   font-family: "Space Grotesk", sans-serif;
-  color: #f4efe6;
+  color: #eef2f8;
   background:
-    radial-gradient(circle at top left, rgba(255, 155, 46, 0.22), transparent 28%),
-    radial-gradient(circle at top right, rgba(71, 140, 255, 0.18), transparent 24%),
-    linear-gradient(180deg, #0e1016 0%, #121722 45%, #171f2d 100%);
+    radial-gradient(circle at top left, rgba(92, 139, 255, 0.14), transparent 22%),
+    radial-gradient(circle at top right, rgba(255, 140, 74, 0.12), transparent 20%),
+    linear-gradient(180deg, #0b0f16 0%, #101620 48%, #141c27 100%);
   line-height: 1.4;
   font-weight: 400;
   color-scheme: dark;
-  --panel: rgba(14, 18, 28, 0.76);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --accent: #ff7a1a;
-  --danger: #ff5a5a;
-  --blue: #65b4ff;
-  --text-muted: #b2bacb;
-  --shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+  --panel: rgba(11, 15, 22, 0.78);
+  --panel-soft: rgba(17, 23, 33, 0.92);
+  --panel-border: rgba(255, 255, 255, 0.07);
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-strong: rgba(255, 255, 255, 0.06);
+  --accent: #ff8a3d;
+  --danger: #ff6767;
+  --blue: #75bbff;
+  --text-muted: #9eabbd;
+  --shadow: 0 26px 70px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -56,7 +59,7 @@ button {
   overflow: hidden;
   border: 1px solid var(--panel-border);
   background: var(--panel);
-  border-radius: 28px;
+  border-radius: 26px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
 }
@@ -105,8 +108,8 @@ button {
   width: 100%;
   max-width: 320px;
   padding: 22px;
-  border-radius: 24px;
-  background: linear-gradient(145deg, rgba(255, 122, 26, 0.2), rgba(101, 180, 255, 0.08));
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 138, 61, 0.12), rgba(117, 187, 255, 0.06));
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -117,8 +120,8 @@ button {
 .arena-shell__hud article span {
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  font-size: 0.73rem;
-  color: #d4d8e3;
+  font-size: 0.72rem;
+  color: #c6d0de;
 }
 
 .hero__badge strong,
@@ -167,7 +170,7 @@ button {
 .builder__meta-grid,
 .editor-toolbar__buttons {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .settings-grid,
@@ -183,7 +186,6 @@ button {
 
 .builder__ranges {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
   margin-top: 22px;
 }
 
@@ -203,17 +205,21 @@ button {
 .score-chip,
 .pattern-chip,
 .prefab-card,
-.editor-viewport {
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(24, 30, 44, 0.96), rgba(13, 18, 28, 0.96));
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.editor-viewport,
+.editor-sidebar,
+.editor-main {
+  border-radius: 20px;
+  background: var(--panel-soft);
+  border: 1px solid var(--panel-border);
 }
 
 .settings-card,
 .mode-card,
 .score-chip,
 .pattern-chip,
-.prefab-card {
+.prefab-card,
+.editor-sidebar,
+.editor-main {
   padding: 18px;
 }
 
@@ -222,7 +228,7 @@ button {
   text-align: left;
   width: 100%;
   color: inherit;
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .mode-card:hover,
@@ -232,30 +238,33 @@ button {
 .ghost-button:hover,
 .delete-button:hover,
 .prefab-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .mode-card:hover,
 .prefab-card:hover {
-  border-color: rgba(255, 122, 26, 0.5);
-  box-shadow: 0 24px 42px rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 138, 61, 0.32);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
 }
 
 .prefab-card strong {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.prefab-card--active {
-  background: linear-gradient(135deg, rgba(255, 122, 26, 0.24), rgba(255, 164, 46, 0.14));
-  border-color: rgba(255, 122, 26, 0.5);
+.prefab-card--active,
+.score-chip--active,
+.pattern-chip--active,
+.primary-button {
+  background: linear-gradient(180deg, rgba(255, 138, 61, 0.16), rgba(255, 138, 61, 0.08));
+  border-color: rgba(255, 138, 61, 0.34);
 }
 
 .delete-button {
-  border: 1px solid rgba(255, 90, 90, 0.35);
-  background: rgba(255, 90, 90, 0.1);
-  color: #ffc8c8;
-  border-radius: 14px;
+  border: 1px solid rgba(255, 103, 103, 0.3);
+  background: rgba(255, 103, 103, 0.08);
+  color: #ffcaca;
+  border-radius: 12px;
   padding: 8px 12px;
 }
 
@@ -272,12 +281,12 @@ button {
 
 .mode-card h3 {
   font-family: "Sora", sans-serif;
-  margin: 10px 0;
-  font-size: 1.3rem;
+  margin: 10px 0 8px;
+  font-size: 1.24rem;
 }
 
 .mode-card p {
-  min-height: 56px;
+  min-height: 0;
 }
 
 .mode-card__stats,
@@ -289,15 +298,16 @@ button {
 
 .mode-card__stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 20px 0 0;
+  margin: 18px 0 0;
 }
 
 .mode-card__stats div,
 .arena-shell__hud article,
 .session-stats__grid article {
   padding: 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .mode-card__stats dt {
@@ -311,7 +321,7 @@ button {
 .field__row strong,
 .editor-toolbar strong {
   margin: 6px 0 0;
-  font-size: 1.1rem;
+  font-size: 1.06rem;
   font-weight: 700;
 }
 
@@ -326,7 +336,7 @@ button {
 .editor-toolbar,
 .editor-toolbar__group {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .field {
@@ -337,19 +347,26 @@ button {
 .field__row span,
 .pattern-chip,
 .score-chip strong {
-  color: #dde3ef;
+  color: #dce5f2;
 }
 
 .field input,
 .field textarea,
 .field select {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 13px 14px;
   color: inherit;
   outline: none;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: rgba(117, 187, 255, 0.35);
+  box-shadow: 0 0 0 3px rgba(117, 187, 255, 0.08);
 }
 
 .field textarea {
@@ -380,7 +397,7 @@ input[type="range"] {
 .delete-button,
 .prefab-card {
   color: inherit;
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
 .score-chip,
@@ -389,49 +406,68 @@ input[type="range"] {
 .ghost-button,
 .delete-button,
 .prefab-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .pattern-chip,
-.primary-button,
 .ghost-button {
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.score-chip--active,
-.pattern-chip--active,
 .primary-button {
-  background: linear-gradient(135deg, rgba(255, 122, 26, 0.24), rgba(255, 164, 46, 0.14));
-  border-color: rgba(255, 122, 26, 0.5);
+  border-radius: 14px;
 }
 
 .primary-button,
 .ghost-button {
-  padding: 14px 18px;
+  padding: 13px 16px;
 }
 
 .builder--workspace {
   overflow: visible;
 }
 
+.builder__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .editor-workspace {
-  grid-template-columns: 290px minmax(0, 1fr) 290px;
+  grid-template-columns: 270px minmax(0, 1fr) 270px;
   margin-top: 22px;
   align-items: start;
+  gap: 18px;
+}
+
+.editor-sidebar {
+  padding: 16px;
+  position: sticky;
+  top: 20px;
 }
 
 .editor-panel {
-  gap: 14px;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.editor-panel:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .editor-toolbar {
   grid-template-columns: 1fr auto;
   align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .editor-toolbar__group {
-  gap: 10px;
+  gap: 8px;
 }
 
 .editor-toolbar__buttons {
@@ -442,13 +478,21 @@ input[type="range"] {
   min-height: 620px;
   overflow: hidden;
   padding: 0;
+  background: #0b1119;
 }
 
 .editor-statusbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 10px;
   padding: 14px 0 0;
+}
+
+.editor-statusbar span {
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .arena-shell__hud {
@@ -466,7 +510,7 @@ input[type="range"] {
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 28px;
+  border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: none;
 }
@@ -492,8 +536,8 @@ input[type="range"] {
   z-index: 3;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  background: rgba(8, 12, 20, 0.52);
+  border-radius: 16px;
+  background: rgba(8, 12, 20, 0.5);
   backdrop-filter: blur(10px);
 }
 
@@ -557,6 +601,10 @@ input[type="range"] {
   .editor-workspace {
     grid-template-columns: 1fr;
   }
+
+  .editor-sidebar {
+    position: static;
+  }
 }
 
 @media (max-width: 980px) {
@@ -584,6 +632,12 @@ input[type="range"] {
   .arena-shell__header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .builder__header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .arena__overlay {

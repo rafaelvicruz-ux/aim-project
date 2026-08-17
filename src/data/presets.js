@@ -9,115 +9,82 @@ export const patternOptions = [
   { value: "burst", label: "Burst" },
 ];
 
-const patternDescriptions = {
-  "lane-sweep": "Inimigos varrem corredores laterais com entradas rápidas.",
-  orbit: "Inimigos giram pela arena e trocam distância do jogador.",
-  "depth-pop": "Puxa leitura de profundidade com avanço e recuo constante.",
-  zigzag: "Movimento quebrado para treinar correção de mira.",
-  tower: "Alvos sobem e descem em alturas diferentes para tracking vertical.",
-  burst: "Rajadas curtas de pressão para flick e controle de sequência.",
-};
-
-const mapNames = [
-  "Neon Dock",
-  "Steel Run",
-  "Pulse Yard",
-  "Solar Ring",
-  "Glass Drift",
-  "Red Sector",
-  "Aero Hall",
-  "Core Axis",
-  "Volt Spine",
-  "Night Relay",
-  "Blue Reactor",
-  "Fracture Lane",
-  "Signal Forge",
-  "Static Bloom",
-  "Metal Veil",
-  "Ion Circuit",
-  "Crimson Deck",
-  "Echo Tunnel",
-  "Nova Chamber",
-  "Focus Gate",
-  "Shadow Lift",
-  "Mirage Port",
-  "Arena Theta",
-  "Delta Rise",
-  "Vector Loop",
-  "Flare Grid",
-  "Strike Nest",
-  "Cloud Arena",
-  "Hyper Vault",
-  "Arc Bridge",
-  "Grid Surge",
-  "Prism Forge",
-  "Titan Span",
-  "Orange Rift",
-  "Blue Hollow",
-  "Rapid Bloom",
-  "Zenith Core",
-  "Blast Silo",
-  "Mag Rail",
-  "Phase Rift",
-  "Atlas Ring",
-  "Switch Line",
-  "Motion Cradle",
-  "Snap Yard",
-  "Focus Well",
-  "Halo Station",
-  "Final Drift",
-];
-
-const arenaCycle = ["simulation-bay", "dock-lanes", "vertical-core", "crossfire-yard"];
-const spawnCycle = ["front-arc", "crossfire", "tower-stack", "rush-lanes"];
-const kitCycle = ["clean-range", "urban-cover", "natural-break", "clutter-stack"];
-
-function createPreset(index, name) {
-  const pattern = patternOptions[index % patternOptions.length].value;
-  const tier = Math.floor(index / 12);
-  const targetSize = Math.max(20, 56 - (index % 6) * 4 - tier * 2);
-  const duration = 25 + (index % 5) * 5 + tier * 3;
-  const goalHits = 12 + (index % 7) * 2 + tier * 3;
-  const simultaneousTargets = 1 + ((index + tier) % 3);
-  const moveSpeed = 35 + (index % 8) * 16 + tier * 12;
-  const strafeIntensity = 18 + (index % 6) * 8;
-  const verticalDrift = 8 + (index % 5) * 6;
-  const depthLayers = 2 + (index % 3);
-  const targetLifetime = 1200 + (index % 6) * 240;
-  const spawnRate = Math.max(260, 780 - (index % 9) * 45 - tier * 30);
-  const scoringCycle = ["precision", "combo", "tracking"];
-  const arenaPrefab = arenaCycle[index % arenaCycle.length];
-  const spawnPreset = spawnCycle[(index + tier) % spawnCycle.length];
-  const obstacleKit = kitCycle[(index + 1) % kitCycle.length];
-  const draft = createDraftFromBlueprint(index % 4 === 0 ? "flick-lab" : index % 4 === 1 ? "tracker-grid" : index % 4 === 2 ? "pressure-yard" : "rush-chaos");
-  const obstacleSet = getObstacleKit(obstacleKit).obstacleSet;
+function createTrainingPreset(index, config) {
+  const obstacleSet = getObstacleKit(config.obstacleKit ?? "clean-range").obstacleSet;
 
   return {
-    id: `map-${String(index + 1).padStart(2, "0")}`,
-    name: `${String(index + 1).padStart(2, "0")} ${name}`,
-    description: patternDescriptions[pattern],
-    duration,
-    goalHits,
-    targetSize,
-    spawnRate,
-    targetLifetime,
-    moveSpeed,
-    simultaneousTargets,
-    scoring: scoringCycle[index % scoringCycle.length],
-    pattern,
-    depthLayers,
-    strafeIntensity,
-    verticalDrift,
-    arenaPrefab,
-    spawnPreset,
-    obstacleKit,
+    id: `scenario-${String(index + 1).padStart(2, "0")}`,
+    name: `${String(index + 1).padStart(2, "0")} ${config.name}`,
+    category: config.category,
+    ruleLabel: config.ruleLabel,
+    requireHeadshot: Boolean(config.requireHeadshot),
+    activationDelay: config.activationDelay ?? 0,
+    description: config.description,
+    duration: config.duration,
+    goalHits: config.goalHits,
+    targetSize: config.targetSize,
+    spawnRate: config.spawnRate,
+    targetLifetime: config.targetLifetime,
+    moveSpeed: config.moveSpeed,
+    simultaneousTargets: config.simultaneousTargets,
+    scoring: config.scoring,
+    pattern: config.pattern,
+    depthLayers: config.depthLayers,
+    strafeIntensity: config.strafeIntensity,
+    verticalDrift: config.verticalDrift,
+    arenaPrefab: config.arenaPrefab,
+    spawnPreset: config.spawnPreset,
+    obstacleKit: config.obstacleKit,
     obstacleSet,
-    obstacles: buildObstacleLayout(obstacleSet, arenaPrefab),
-    spawnNodes: draft.spawnNodes,
+    obstacles: buildObstacleLayout(obstacleSet, config.arenaPrefab),
+    spawnNodes: createDraftFromBlueprint(config.blueprint).spawnNodes,
   };
 }
 
-export const defaultPresets = mapNames.map((name, index) => createPreset(index, name));
+const trainingScenarios = [
+  { category: "Flick", name: "Flick em alvo parado", ruleLabel: "Centro rapido", description: "Mire no centro de vários alvos rapidamente.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 35, goalHits: 28, targetSize: 42, spawnRate: 480, targetLifetime: 1800, moveSpeed: 35, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 10, verticalDrift: 6 },
+  { category: "Flick", name: "Flick esquerda -> direita", ruleLabel: "Alternancia lateral", description: "Alterne entre dois alvos em lados opostos.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "precision", pattern: "lane-sweep", duration: 35, goalHits: 26, targetSize: 40, spawnRate: 500, targetLifetime: 1600, moveSpeed: 70, simultaneousTargets: 2, depthLayers: 2, strafeIntensity: 42, verticalDrift: 4 },
+  { category: "Flick", name: "Flick aleatorio", ruleLabel: "Posicoes imprevisiveis", description: "Escolha alvos em posições diferentes sem ordem previsível.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "precision", pattern: "burst", duration: 40, goalHits: 30, targetSize: 38, spawnRate: 430, targetLifetime: 1500, moveSpeed: 82, simultaneousTargets: 3, depthLayers: 3, strafeIntensity: 30, verticalDrift: 8 },
+  { category: "Flick", name: "Flick 180", ruleLabel: "Virada rapida", description: "Vire rapidamente para acertar um alvo atrás.", blueprint: "rush-chaos", arenaPrefab: "dock-lanes", spawnPreset: "rush-lanes", obstacleKit: "clean-range", scoring: "combo", pattern: "zigzag", duration: 35, goalHits: 24, targetSize: 40, spawnRate: 420, targetLifetime: 1350, moveSpeed: 95, simultaneousTargets: 2, depthLayers: 2, strafeIntensity: 56, verticalDrift: 6 },
+  { category: "Flick", name: "Flick pequeno", ruleLabel: "Micro troca", description: "Pratique movimentos curtos entre alvos próximos.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 35, goalHits: 32, targetSize: 46, spawnRate: 390, targetLifetime: 1700, moveSpeed: 42, simultaneousTargets: 2, depthLayers: 2, strafeIntensity: 16, verticalDrift: 5 },
+  { category: "Flick", name: "Flick grande", ruleLabel: "Longa distancia", description: "Pratique movimentos de longa distância entre alvos.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "precision", pattern: "orbit", duration: 40, goalHits: 26, targetSize: 36, spawnRate: 500, targetLifetime: 1650, moveSpeed: 64, simultaneousTargets: 2, depthLayers: 4, strafeIntensity: 28, verticalDrift: 12 },
+  { category: "Flick", name: "Flick + headshot", ruleLabel: "Headshot only", requireHeadshot: true, description: "Só considere o tiro válido se acertar a cabeça.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "burst", duration: 35, goalHits: 22, targetSize: 26, spawnRate: 520, targetLifetime: 1400, moveSpeed: 48, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 18, verticalDrift: 10 },
+  { category: "Flick", name: "Flick com tempo limitado", ruleLabel: "Janela curta", description: "Tente acertar o máximo possível em 30 segundos.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "combo", pattern: "burst", duration: 30, goalHits: 30, targetSize: 38, spawnRate: 360, targetLifetime: 1250, moveSpeed: 72, simultaneousTargets: 3, depthLayers: 3, strafeIntensity: 34, verticalDrift: 8 },
+  { category: "Flick", name: "Flick apos movimento", ruleLabel: "Reposicionamento", description: "Mova-se antes de cada tiro para treinar reset de mira.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "urban-cover", scoring: "combo", pattern: "lane-sweep", duration: 40, goalHits: 24, targetSize: 38, spawnRate: 470, targetLifetime: 1450, moveSpeed: 96, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 48, verticalDrift: 8 },
+  { category: "Flick", name: "Flick sem corrigir", ruleLabel: "Primeiro movimento", description: "Tente acertar o alvo com um único movimento seco.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 35, goalHits: 24, targetSize: 34, spawnRate: 540, targetLifetime: 1300, moveSpeed: 40, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 8, verticalDrift: 4 },
+  { category: "Tracking", name: "Tracking horizontal", ruleLabel: "Lado a lado", description: "Acompanhe um alvo andando para os lados.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "tracking", pattern: "lane-sweep", duration: 45, goalHits: 24, targetSize: 40, spawnRate: 650, targetLifetime: 2600, moveSpeed: 125, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 68, verticalDrift: 6 },
+  { category: "Tracking", name: "Tracking vertical", ruleLabel: "Subida e descida", description: "Acompanhe um alvo subindo e descendo.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "tower-stack", obstacleKit: "clean-range", scoring: "tracking", pattern: "tower", duration: 45, goalHits: 22, targetSize: 38, spawnRate: 670, targetLifetime: 2700, moveSpeed: 88, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 28, verticalDrift: 60 },
+  { category: "Tracking", name: "Tracking circular", ruleLabel: "Orbit tracking", description: "Acompanhe um alvo fazendo círculos ao redor da arena.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "tracking", pattern: "orbit", duration: 50, goalHits: 26, targetSize: 38, spawnRate: 620, targetLifetime: 2800, moveSpeed: 96, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 44, verticalDrift: 22 },
+  { category: "Tracking", name: "Tracking rapido", ruleLabel: "Alta velocidade", description: "Acompanhe alvos com alta velocidade e pouca folga.", blueprint: "tracker-grid", arenaPrefab: "crossfire-yard", spawnPreset: "rush-lanes", obstacleKit: "clean-range", scoring: "tracking", pattern: "zigzag", duration: 45, goalHits: 24, targetSize: 34, spawnRate: 520, targetLifetime: 1800, moveSpeed: 150, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 80, verticalDrift: 10 },
+  { category: "Tracking", name: "Tracking lento", ruleLabel: "Controle fino", description: "Priorize precisão em vez de velocidade.", blueprint: "tracker-grid", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "tracking", pattern: "depth-pop", duration: 55, goalHits: 20, targetSize: 44, spawnRate: 720, targetLifetime: 3200, moveSpeed: 52, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 24, verticalDrift: 6 },
+  { category: "Tracking", name: "Tracking + strafe", ruleLabel: "Voce e alvo movem", description: "Você e o alvo se movimentam ao mesmo tempo.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "urban-cover", scoring: "tracking", pattern: "lane-sweep", duration: 50, goalHits: 24, targetSize: 38, spawnRate: 590, targetLifetime: 2400, moveSpeed: 120, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 64, verticalDrift: 14 },
+  { category: "Tracking", name: "Tracking com mudanca de direcao", ruleLabel: "Quebra de direcao", description: "O alvo muda de direção inesperadamente.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "tracking", pattern: "zigzag", duration: 45, goalHits: 25, targetSize: 38, spawnRate: 560, targetLifetime: 2100, moveSpeed: 126, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 76, verticalDrift: 12 },
+  { category: "Tracking", name: "Tracking de alvo pequeno", ruleLabel: "Hitbox menor", description: "Use alvos menores para exigir mais controle.", blueprint: "tracker-grid", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "tracking", pattern: "depth-pop", duration: 45, goalHits: 20, targetSize: 26, spawnRate: 680, targetLifetime: 2600, moveSpeed: 88, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 34, verticalDrift: 10 },
+  { category: "Tracking", name: "Tracking continuo", ruleLabel: "Sem perder o alvo", description: "Tente não sair do alvo durante 30 a 60 segundos.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "tower-stack", obstacleKit: "clean-range", scoring: "tracking", pattern: "tower", duration: 60, goalHits: 28, targetSize: 40, spawnRate: 760, targetLifetime: 3600, moveSpeed: 82, simultaneousTargets: 1, depthLayers: 4, strafeIntensity: 22, verticalDrift: 54 },
+  { category: "Tracking", name: "Tracking + tiro", ruleLabel: "Rastreamento ativo", description: "Acompanhe o alvo mantendo o disparo constante.", blueprint: "tracker-grid", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "tracking", pattern: "orbit", duration: 50, goalHits: 30, targetSize: 38, spawnRate: 600, targetLifetime: 2500, moveSpeed: 104, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 40, verticalDrift: 16 },
+  { category: "Micro", name: "Alvo pequeno parado", ruleLabel: "Centro exato", description: "Tente acertar exatamente o centro de um alvo pequeno.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 40, goalHits: 20, targetSize: 22, spawnRate: 640, targetLifetime: 2200, moveSpeed: 20, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 0, verticalDrift: 0 },
+  { category: "Micro", name: "Correcao apos flick", ruleLabel: "Ajuste fino", description: "Faça um flick e corrija a mira com ajuste fino.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "precision", pattern: "burst", duration: 40, goalHits: 24, targetSize: 28, spawnRate: 520, targetLifetime: 1600, moveSpeed: 54, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 16, verticalDrift: 8 },
+  { category: "Micro", name: "Headshot preciso", ruleLabel: "Cabeca somente", requireHeadshot: true, description: "Mire somente na cabeça com alvo menor e punição de erro.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 40, goalHits: 18, targetSize: 20, spawnRate: 700, targetLifetime: 1800, moveSpeed: 24, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 0, verticalDrift: 4 },
+  { category: "Micro", name: "Microflick", ruleLabel: "Movimento minimo", description: "Use movimentos extremamente pequenos entre alvos muito próximos.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 35, goalHits: 30, targetSize: 30, spawnRate: 420, targetLifetime: 1400, moveSpeed: 26, simultaneousTargets: 2, depthLayers: 2, strafeIntensity: 8, verticalDrift: 0 },
+  { category: "Micro", name: "Precisao em longa distancia", ruleLabel: "Long range", description: "Pratique alvos pequenos e distantes.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "tower-stack", obstacleKit: "clean-range", scoring: "precision", pattern: "tower", duration: 45, goalHits: 18, targetSize: 22, spawnRate: 660, targetLifetime: 2100, moveSpeed: 42, simultaneousTargets: 1, depthLayers: 4, strafeIntensity: 12, verticalDrift: 18 },
+  { category: "Micro", name: "Crosshair placement", ruleLabel: "Pre-aim", description: "Mantenha a mira onde a cabeça provavelmente aparecerá.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "urban-cover", scoring: "precision", pattern: "lane-sweep", duration: 45, goalHits: 22, targetSize: 28, spawnRate: 560, targetLifetime: 1700, moveSpeed: 68, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 34, verticalDrift: 4 },
+  { category: "Micro", name: "Peek + microajuste", ruleLabel: "Cobertura e ajuste", description: "Saia da cobertura e ajuste rapidamente para concluir o tiro.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "urban-cover", scoring: "combo", pattern: "burst", duration: 40, goalHits: 22, targetSize: 30, spawnRate: 500, targetLifetime: 1450, moveSpeed: 78, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 24, verticalDrift: 6 },
+  { category: "Micro", name: "Microajuste horizontal", ruleLabel: "Ajuste lateral", description: "Corrija apenas esquerda e direita em pequenos deslocamentos.", blueprint: "tracker-grid", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "lane-sweep", duration: 40, goalHits: 24, targetSize: 28, spawnRate: 600, targetLifetime: 1900, moveSpeed: 42, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 26, verticalDrift: 0 },
+  { category: "Micro", name: "Microajuste vertical", ruleLabel: "Ajuste vertical", description: "Corrija apenas cima e baixo em pequenos deslocamentos.", blueprint: "tracker-grid", arenaPrefab: "vertical-core", spawnPreset: "tower-stack", obstacleKit: "clean-range", scoring: "precision", pattern: "tower", duration: 40, goalHits: 22, targetSize: 28, spawnRate: 610, targetLifetime: 1900, moveSpeed: 38, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 8, verticalDrift: 28 },
+  { category: "Micro", name: "Alvo aparecendo parcialmente", ruleLabel: "Visibilidade parcial", description: "Pratique acertar somente uma pequena parte visível do alvo.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "clutter-stack", scoring: "precision", pattern: "depth-pop", duration: 45, goalHits: 20, targetSize: 24, spawnRate: 620, targetLifetime: 1700, moveSpeed: 48, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 18, verticalDrift: 4 },
+  { category: "Reacao", name: "Reacao a alvo aparecendo", ruleLabel: "Spawn instantaneo", description: "Atire assim que o alvo surgir na tela.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "combo", pattern: "burst", duration: 35, goalHits: 26, targetSize: 38, spawnRate: 420, targetLifetime: 1100, moveSpeed: 34, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 0, verticalDrift: 0 },
+  { category: "Reacao", name: "Reacao aleatoria esquerda/direita", ruleLabel: "Lado imprevisivel", description: "Não saiba previamente onde o alvo vai aparecer.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "combo", pattern: "lane-sweep", duration: 35, goalHits: 24, targetSize: 38, spawnRate: 410, targetLifetime: 1150, moveSpeed: 64, simultaneousTargets: 2, depthLayers: 2, strafeIntensity: 38, verticalDrift: 0 },
+  { category: "Reacao", name: "Reacao com headshot", ruleLabel: "Headshot only", requireHeadshot: true, description: "Só vale o tiro se ele for um headshot rápido.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "burst", duration: 35, goalHits: 18, targetSize: 22, spawnRate: 460, targetLifetime: 1000, moveSpeed: 28, simultaneousTargets: 1, depthLayers: 3, strafeIntensity: 0, verticalDrift: 4 },
+  { category: "Reacao", name: "Reacao a mudanca de cor", ruleLabel: "Ative na cor", activationDelay: 480, description: "Atire quando o alvo mudar de cor ou entrar na janela certa.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "combo", pattern: "depth-pop", duration: 40, goalHits: 24, targetSize: 34, spawnRate: 520, targetLifetime: 1450, moveSpeed: 26, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 0, verticalDrift: 0 },
+  { category: "Reacao", name: "Reacao + movimento", ruleLabel: "Mover e reagir", description: "Movimente-se enquanto reage ao surgimento dos alvos.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "urban-cover", scoring: "combo", pattern: "lane-sweep", duration: 40, goalHits: 22, targetSize: 36, spawnRate: 430, targetLifetime: 1150, moveSpeed: 88, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 42, verticalDrift: 6 },
+  { category: "Reacao", name: "Reaction shot", ruleLabel: "Janela rapida", description: "Fique parado e espere o alvo aparecer para disparar instantaneamente.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "combo", pattern: "burst", duration: 30, goalHits: 24, targetSize: 36, spawnRate: 390, targetLifetime: 980, moveSpeed: 20, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 0, verticalDrift: 0 },
+  { category: "Reacao", name: "Multiple reaction targets", ruleLabel: "Escolha instantanea", description: "Escolha rapidamente entre vários alvos assim que surgirem.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "combo", pattern: "burst", duration: 40, goalHits: 30, targetSize: 34, spawnRate: 350, targetLifetime: 1050, moveSpeed: 74, simultaneousTargets: 3, depthLayers: 3, strafeIntensity: 18, verticalDrift: 8 },
+  { category: "Reacao", name: "Reacao apos som", ruleLabel: "Sinal antes do tiro", activationDelay: 520, description: "Atire quando ouvir o sinal e o alvo for liberado.", blueprint: "flick-lab", arenaPrefab: "simulation-bay", spawnPreset: "front-arc", obstacleKit: "clean-range", scoring: "precision", pattern: "depth-pop", duration: 35, goalHits: 22, targetSize: 34, spawnRate: 500, targetLifetime: 1500, moveSpeed: 22, simultaneousTargets: 1, depthLayers: 2, strafeIntensity: 0, verticalDrift: 0 },
+  { category: "Reacao", name: "Reacao 180", ruleLabel: "Virada reativa", description: "Responda a um alvo que aparece atrás de você.", blueprint: "rush-chaos", arenaPrefab: "dock-lanes", spawnPreset: "rush-lanes", obstacleKit: "clean-range", scoring: "combo", pattern: "zigzag", duration: 35, goalHits: 20, targetSize: 38, spawnRate: 430, targetLifetime: 1100, moveSpeed: 90, simultaneousTargets: 2, depthLayers: 2, strafeIntensity: 48, verticalDrift: 0 },
+  { category: "Reacao", name: "Reacao progressiva", ruleLabel: "Tempo decrescente", activationDelay: 260, description: "Diminua gradualmente o tempo disponível a cada série.", blueprint: "pressure-yard", arenaPrefab: "crossfire-yard", spawnPreset: "crossfire", obstacleKit: "clean-range", scoring: "combo", pattern: "burst", duration: 45, goalHits: 28, targetSize: 34, spawnRate: 340, targetLifetime: 900, moveSpeed: 68, simultaneousTargets: 2, depthLayers: 3, strafeIntensity: 20, verticalDrift: 4 },
+];
+
+export const defaultPresets = trainingScenarios.map((scenario, index) => createTrainingPreset(index, scenario));
 
 export const customTemplate = {
   ...createDraftFromBlueprint("flick-lab"),

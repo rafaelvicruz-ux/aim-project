@@ -324,7 +324,7 @@ export default function App() {
       <section className="hero">
         <div className="hero__content">
           <span className="eyebrow">AimForge 3D</span>
-          <h1>Treino de mira com mapas 3D, meta de acertos e criador de arenas.</h1>
+          <h1>Treino de mira com cenarios de flick, tracking, microajuste e reacao.</h1>
           <p>
             Agora o jogo tem 47 mapas, FPS em primeira pessoa, inimigos 3D, objetivo por hits, tempo
             para concluir, trilhas na pasta music e editor para criar novas rotas com obstáculos.
@@ -418,3 +418,4 @@ export default function App() {
     </main>
   );
 }
+

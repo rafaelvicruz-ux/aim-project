@@ -51,6 +51,7 @@ function spawnEnemy(mode, now) {
   return {
     id: `${now}-${Math.random().toString(16).slice(2)}`,
     bornAt: now,
+    armedAt: now + (mode.activationDelay ?? 0),
     expiresAt: now + mode.targetLifetime,
     x: baseX,
     y: baseHeight,
@@ -263,8 +264,12 @@ function PlayerRig({ speed, sensitivity }) {
   return <PointerLockControls ref={controlsRef} selector="#fps-lock-button" pointerSpeed={sensitivity} />;
 }
 
-function Enemy({ enemy, registerEnemy, scale }) {
+function Enemy({ enemy, registerEnemy, scale, requireHeadshot }) {
   const groupRef = useRef(null);
+  const isArmed = performance.now() >= enemy.armedAt;
+  const bodyColor = isArmed ? "#ff6d3a" : "#4f6588";
+  const bodyEmissive = isArmed ? "#3a0f00" : "#0c1b35";
+  const headColor = requireHeadshot ? (isArmed ? "#ffe082" : "#6d7f95") : "#ffd4b8";
 
   useEffect(() => {
     if (!groupRef.current) {
@@ -282,15 +287,15 @@ function Enemy({ enemy, registerEnemy, scale }) {
 
   return (
     <group ref={groupRef} position={[enemy.x, enemy.y, enemy.z]} scale={scale}>
-      <mesh castShadow position={[0, 1.2, 0]}>
+      <mesh castShadow position={[0, 1.2, 0]} userData={{ enemyId: enemy.id, hitZone: "body" }}>
         <capsuleGeometry args={[0.45, 1.3, 6, 12]} />
-        <meshStandardMaterial color="#ff6d3a" emissive="#3a0f00" emissiveIntensity={0.35} roughness={0.45} metalness={0.15} />
+        <meshStandardMaterial color={bodyColor} emissive={bodyEmissive} emissiveIntensity={0.35} roughness={0.45} metalness={0.15} />
       </mesh>
-      <mesh castShadow position={[0, 2.35, 0]}>
+      <mesh castShadow position={[0, 2.35, 0]} userData={{ enemyId: enemy.id, hitZone: "head" }}>
         <sphereGeometry args={[0.34, 18, 18]} />
-        <meshStandardMaterial color="#ffd4b8" roughness={0.9} />
+        <meshStandardMaterial color={headColor} roughness={0.9} emissive={requireHeadshot && isArmed ? "#7a5600" : "#000000"} emissiveIntensity={requireHeadshot ? 0.22 : 0} />
       </mesh>
-      <mesh castShadow position={[0.35, 1.25, 0.18]} rotation={[0.2, 0.4, 0]}>
+      <mesh castShadow position={[0.35, 1.25, 0.18]} rotation={[0.2, 0.4, 0]} userData={{ enemyId: enemy.id, hitZone: "body" }}>
         <boxGeometry args={[0.18, 0.18, 0.8]} />
         <meshStandardMaterial color="#26324a" metalness={0.35} roughness={0.32} />
       </mesh>
@@ -493,7 +498,15 @@ function FpsScene({ enemies, bursts, obstacles, bindShooter, mode, sensitivity, 
       raycaster.setFromCamera(center, camera);
       const intersections = raycaster.intersectObjects(roots, true);
       const hit = intersections.find((entry) => entry.object.userData.enemyId);
-      return hit ? hit.object.userData.enemyId : null;
+
+      if (!hit) {
+        return null;
+      }
+
+      return {
+        enemyId: hit.object.userData.enemyId,
+        hitZone: hit.object.userData.hitZone ?? "body",
+      };
     };
 
     bindShooter(shoot);
@@ -539,7 +552,7 @@ function FpsScene({ enemies, bursts, obstacles, bindShooter, mode, sensitivity, 
         <Obstacle key={obstacle.id} obstacle={obstacle} />
       ))}
       {enemies.map((enemy) => (
-        <Enemy key={enemy.id} enemy={enemy} registerEnemy={registerEnemy} scale={enemyScale} />
+        <Enemy key={enemy.id} enemy={enemy} registerEnemy={registerEnemy} scale={enemyScale} requireHeadshot={mode.requireHeadshot} />
       ))}
       {bursts.map((burst) => (
         <HitBurst key={burst.id} burst={burst} />
@@ -642,20 +655,33 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
       }
 
       setShotPulse(1);
-      const enemyId = shooterRef.current();
+      const shot = shooterRef.current();
 
-      if (!enemyId) {
+      if (!shot?.enemyId) {
         setStats((currentStats) => ({ ...currentStats, shots: currentStats.shots + 1, misses: currentStats.misses + 1, combo: 0 }));
         return;
       }
 
       setEnemies((currentEnemies) => {
-        const target = currentEnemies.find((enemy) => enemy.id === enemyId);
+        const target = currentEnemies.find((enemy) => enemy.id === shot.enemyId);
         if (!target) {
           return currentEnemies;
         }
 
-        const reaction = performance.now() - target.bornAt;
+        const isArmed = performance.now() >= target.armedAt;
+        const wrongZone = mode.requireHeadshot && shot.hitZone !== "head";
+
+        if (!isArmed || wrongZone) {
+          setStats((currentStats) => ({
+            ...currentStats,
+            shots: currentStats.shots + 1,
+            misses: currentStats.misses + 1,
+            combo: 0,
+          }));
+          return currentEnemies;
+        }
+
+        const reaction = performance.now() - target.armedAt;
         setStats((currentStats) => {
           const nextCombo = currentStats.combo + 1;
           return {
@@ -669,8 +695,8 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
           };
         });
 
-        setBursts((currentBursts) => [...currentBursts, { id: `${enemyId}-burst`, x: target.x, y: target.y, z: target.z, life: 1 }]);
-        return currentEnemies.filter((enemy) => enemy.id !== enemyId);
+        setBursts((currentBursts) => [...currentBursts, { id: `${shot.enemyId}-burst`, x: target.x, y: target.y, z: target.z, life: 1 }]);
+        return currentEnemies.filter((enemy) => enemy.id !== shot.enemyId);
       });
     };
 
@@ -686,6 +712,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         <div>
           <span className="eyebrow">Real 3D FPS Session</span>
           <h2>{mode.name}</h2>
+          {mode.ruleLabel ? <p className="arena__helper">Regra: {mode.ruleLabel}</p> : null}
         </div>
         <button className="ghost-button" onClick={onExit}>
           Encerrar
