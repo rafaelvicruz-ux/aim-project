@@ -179,38 +179,38 @@ export default function App() {
     return {
       ...mode,
       difficultyLabel: activeRank.label,
-      spawnRate: Math.max(260, mode.spawnRate - rankBoost * 14),
-      moveSpeed: mode.moveSpeed + rankBoost * 6,
-      strafeIntensity: mode.strafeIntensity + rankBoost * 4,
-      verticalDrift: mode.verticalDrift + rankBoost * 2,
-      targetLifetime: Math.max(700, mode.targetLifetime - rankBoost * 35),
-      goalHits: mode.goalHits + (rankBoost >= 3 ? 1 : 0),
-      simultaneousTargets: Math.min(5, mode.simultaneousTargets + (rankBoost >= 4 ? 1 : 0)),
+      spawnRate: Math.max(420, mode.spawnRate - rankBoost * 6),
+      moveSpeed: mode.moveSpeed + rankBoost * 2,
+      strafeIntensity: mode.strafeIntensity + rankBoost * 1,
+      verticalDrift: mode.verticalDrift + rankBoost * 1,
+      targetLifetime: Math.max(1200, mode.targetLifetime - rankBoost * 10),
+      goalHits: mode.goalHits,
+      simultaneousTargets: mode.simultaneousTargets,
     };
   };
 
   const updateAdaptiveRank = (rawStats) => {
     const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
-    const completionBonus = rawStats.completed ? 14 : -4;
-    const accuracyDelta = accuracy >= 82 ? 12 : accuracy >= 68 ? 7 : accuracy >= 58 ? 2 : -4;
-    const comboDelta = rawStats.bestCombo >= 6 ? 4 : rawStats.bestCombo >= 3 ? 2 : 0;
+    const completionBonus = rawStats.completed ? 18 : -2;
+    const accuracyDelta = accuracy >= 70 ? 12 : accuracy >= 55 ? 7 : accuracy >= 40 ? 3 : -2;
+    const comboDelta = rawStats.bestCombo >= 4 ? 4 : rawStats.bestCombo >= 2 ? 2 : 0;
     const totalDelta = completionBonus + accuracyDelta + comboDelta;
 
     setRankState((current) => {
       let nextPerformance = current.performanceScore + totalDelta;
       let nextRankIndex = current.rankIndex;
 
-      while (nextPerformance >= 12 && nextRankIndex < ranks.length - 1) {
+      while (nextPerformance >= 8 && nextRankIndex < ranks.length - 1) {
         nextPerformance -= 12;
         nextRankIndex += 1;
       }
 
-      while (nextPerformance <= -28 && nextRankIndex > 0) {
-        nextPerformance += 12;
+      while (nextPerformance <= -40 && nextRankIndex > 0) {
+        nextPerformance += 8;
         nextRankIndex -= 1;
       }
 
-      nextPerformance = Math.max(-27, Math.min(27, nextPerformance));
+      nextPerformance = Math.max(-39, Math.min(23, nextPerformance));
 
       return {
         rankIndex: nextRankIndex,
@@ -416,3 +416,4 @@ export default function App() {
     </main>
   );
 }
+
