@@ -1,12 +1,15 @@
 import { OrbitControls, TransformControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
+import { useRef } from "react";
 import { getArenaPrefab } from "../data/gameConfig";
 
-function ObstacleModel({ obstacle, selected, onSelect }) {
+function ObstacleModel({ obstacle, selected, onSelect, transformMode, onTransformEntity, orbitRef }) {
+  const objectRef = useRef(null);
+
   const content = (() => {
     if (obstacle.type === "trash-can") {
       return (
-        <group>
+        <>
           <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
             <cylinderGeometry args={[0.5, 0.58, 1.7, 18]} />
             <meshStandardMaterial color="#586271" metalness={0.45} roughness={0.48} />
@@ -15,13 +18,13 @@ function ObstacleModel({ obstacle, selected, onSelect }) {
             <cylinderGeometry args={[0.56, 0.56, 0.12, 18]} />
             <meshStandardMaterial color="#2a3340" metalness={0.38} roughness={0.4} />
           </mesh>
-        </group>
+        </>
       );
     }
 
     if (obstacle.type === "truck") {
       return (
-        <group>
+        <>
           <mesh castShadow receiveShadow position={[0, 1.1, 0]}>
             <boxGeometry args={[4.8, 1.8, 2.2]} />
             <meshStandardMaterial color="#b53c28" metalness={0.32} roughness={0.45} />
@@ -30,7 +33,7 @@ function ObstacleModel({ obstacle, selected, onSelect }) {
             <boxGeometry args={[1.6, 2.1, 2]} />
             <meshStandardMaterial color="#d96c2f" metalness={0.22} roughness={0.4} />
           </mesh>
-        </group>
+        </>
       );
     }
 
@@ -44,7 +47,7 @@ function ObstacleModel({ obstacle, selected, onSelect }) {
     }
 
     return (
-      <group>
+      <>
         <mesh castShadow receiveShadow position={[0, 0.85, 0]}>
           <boxGeometry args={[1.8, 0.15, 1.2]} />
           <meshStandardMaterial color="#7e5739" roughness={0.82} />
@@ -53,49 +56,105 @@ function ObstacleModel({ obstacle, selected, onSelect }) {
           <boxGeometry args={[0.5, 1.1, 0.5]} />
           <meshStandardMaterial color="#8d684b" roughness={0.84} />
         </mesh>
-      </group>
+      </>
     );
   })();
 
   return (
-    <group
-      position={obstacle.position}
-      rotation={obstacle.rotation ?? [0, 0, 0]}
-      scale={obstacle.scale ?? 1}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect({ kind: "obstacle", id: obstacle.id });
-      }}
-    >
-      {content}
+    <>
+      <group
+        ref={objectRef}
+        position={obstacle.position}
+        rotation={obstacle.rotation ?? [0, 0, 0]}
+        scale={obstacle.scale ?? 1}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect({ kind: "obstacle", id: obstacle.id });
+        }}
+      >
+        {content}
+        {selected ? (
+          <mesh position={[0, 2.6, 0]}>
+            <sphereGeometry args={[0.22, 12, 12]} />
+            <meshBasicMaterial color="#ff7a1a" />
+          </mesh>
+        ) : null}
+      </group>
       {selected ? (
-        <mesh position={[0, 2.6, 0]}>
-          <sphereGeometry args={[0.22, 12, 12]} />
-          <meshBasicMaterial color="#ff7a1a" />
-        </mesh>
+        <TransformControls
+          object={objectRef}
+          mode={transformMode}
+          size={0.75}
+          onDraggingChanged={(event) => {
+            if (orbitRef.current) {
+              orbitRef.current.enabled = !event.value;
+            }
+          }}
+          onObjectChange={() => {
+            const object = objectRef.current;
+            if (!object) {
+              return;
+            }
+
+            onTransformEntity({ kind: "obstacle", id: obstacle.id }, {
+              position: [object.position.x, object.position.y, object.position.z],
+              rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+              scale: object.scale.x,
+            });
+          }}
+        />
       ) : null}
-    </group>
+    </>
   );
 }
 
-function SpawnNode({ node, selected, onSelect }) {
+function SpawnNode({ node, selected, onSelect, transformMode, onTransformEntity, orbitRef }) {
+  const objectRef = useRef(null);
+
   return (
-    <group
-      position={node.position}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect({ kind: "spawn", id: node.id });
-      }}
-    >
-      <mesh position={[0, node.height ?? 1.7, 0]} castShadow>
-        <sphereGeometry args={[0.5, 16, 16]} />
-        <meshStandardMaterial color={selected ? "#ff7a1a" : "#67bbff"} emissive="#173a55" emissiveIntensity={0.8} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <ringGeometry args={[0.8, 1.25, 24]} />
-        <meshBasicMaterial color={selected ? "#ffb36b" : "#7bd1ff"} />
-      </mesh>
-    </group>
+    <>
+      <group
+        ref={objectRef}
+        position={node.position}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect({ kind: "spawn", id: node.id });
+        }}
+      >
+        <mesh position={[0, node.height ?? 1.7, 0]} castShadow>
+          <sphereGeometry args={[0.5, 16, 16]} />
+          <meshStandardMaterial color={selected ? "#ff7a1a" : "#67bbff"} emissive="#173a55" emissiveIntensity={0.8} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+          <ringGeometry args={[0.8, 1.25, 24]} />
+          <meshBasicMaterial color={selected ? "#ffb36b" : "#7bd1ff"} />
+        </mesh>
+      </group>
+      {selected ? (
+        <TransformControls
+          object={objectRef}
+          mode={transformMode}
+          size={0.75}
+          onDraggingChanged={(event) => {
+            if (orbitRef.current) {
+              orbitRef.current.enabled = !event.value;
+            }
+          }}
+          onObjectChange={() => {
+            const object = objectRef.current;
+            if (!object) {
+              return;
+            }
+
+            onTransformEntity({ kind: "spawn", id: node.id }, {
+              position: [object.position.x, object.position.y, object.position.z],
+              rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+              scale: object.scale.x,
+            });
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -147,31 +206,9 @@ function ArenaProps({ arenaPrefab }) {
   );
 }
 
-function TransformWrapper({ selection, transformMode, onChange, children }) {
-  return (
-    <TransformControls
-      mode={transformMode}
-      size={0.75}
-      onObjectChange={(event) => {
-        const object = event?.target?.object;
-        if (!object) {
-          return;
-        }
-
-        onChange(selection, {
-          position: [object.position.x, object.position.y, object.position.z],
-          rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-          scale: object.scale.x,
-        });
-      }}
-    >
-      {children}
-    </TransformControls>
-  );
-}
-
 function EditorScene({ draft, selection, transformMode, onSelectEntity, onTransformEntity }) {
   const arena = getArenaPrefab(draft.arenaPrefab);
+  const orbitRef = useRef(null);
 
   return (
     <>
@@ -181,7 +218,7 @@ function EditorScene({ draft, selection, transformMode, onSelectEntity, onTransf
       <directionalLight position={[16, 24, 12]} intensity={1.7} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
       <pointLight position={[0, 12, 0]} intensity={8} color={arena.accentColor} distance={50} />
       <gridHelper args={[96, 24, arena.accentColor, "#243247"]} position={[0, 0.01, 0]} />
-      <OrbitControls makeDefault minDistance={16} maxDistance={96} target={[0, 0, 0]} />
+      <OrbitControls ref={orbitRef} makeDefault minDistance={16} maxDistance={96} target={[0, 0, 0]} />
 
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[96, 96]} />
@@ -203,35 +240,29 @@ function EditorScene({ draft, selection, transformMode, onSelectEntity, onTransf
 
       <ArenaProps arenaPrefab={draft.arenaPrefab} />
 
-      {(draft.spawnNodes ?? []).map((node) => {
-        const selected = selection?.kind === "spawn" && selection.id === node.id;
-        const content = <SpawnNode node={node} selected={selected} onSelect={onSelectEntity} />;
+      {(draft.spawnNodes ?? []).map((node) => (
+        <SpawnNode
+          key={node.id}
+          node={node}
+          selected={selection?.kind === "spawn" && selection.id === node.id}
+          onSelect={onSelectEntity}
+          transformMode={transformMode}
+          onTransformEntity={onTransformEntity}
+          orbitRef={orbitRef}
+        />
+      ))}
 
-        if (!selected) {
-          return <group key={node.id}>{content}</group>;
-        }
-
-        return (
-          <TransformWrapper key={node.id} selection={selection} transformMode={transformMode} onChange={onTransformEntity}>
-            {content}
-          </TransformWrapper>
-        );
-      })}
-
-      {(draft.obstacles ?? []).map((obstacle) => {
-        const selected = selection?.kind === "obstacle" && selection.id === obstacle.id;
-        const content = <ObstacleModel obstacle={obstacle} selected={selected} onSelect={onSelectEntity} />;
-
-        if (!selected) {
-          return <group key={obstacle.id}>{content}</group>;
-        }
-
-        return (
-          <TransformWrapper key={obstacle.id} selection={selection} transformMode={transformMode} onChange={onTransformEntity}>
-            {content}
-          </TransformWrapper>
-        );
-      })}
+      {(draft.obstacles ?? []).map((obstacle) => (
+        <ObstacleModel
+          key={obstacle.id}
+          obstacle={obstacle}
+          selected={selection?.kind === "obstacle" && selection.id === obstacle.id}
+          onSelect={onSelectEntity}
+          transformMode={transformMode}
+          onTransformEntity={onTransformEntity}
+          orbitRef={orbitRef}
+        />
+      ))}
     </>
   );
 }

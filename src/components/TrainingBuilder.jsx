@@ -16,8 +16,8 @@ import {
 import { customTemplate, patternOptions } from "../data/presets";
 
 const scoringOptions = [
-  { value: "precision", label: "Precision", help: "Score focado em acerto limpo e estável." },
-  { value: "combo", label: "Combo", help: "Valoriza sequências longas sem perder ritmo." },
+  { value: "precision", label: "Precision", help: "Score focado em acerto limpo e estavel." },
+  { value: "combo", label: "Combo", help: "Valoriza sequencias longas sem perder ritmo." },
   { value: "tracking", label: "Tracking", help: "Premia leitura de alvo com movimento constante." },
 ];
 
@@ -30,7 +30,7 @@ const rangeFields = [
   { key: "moveSpeed", label: "Velocidade frontal", min: 0, max: 260, step: 10, unit: "px/s" },
   { key: "strafeIntensity", label: "Strafe lateral", min: 0, max: 180, step: 5, unit: "px/s" },
   { key: "verticalDrift", label: "Deriva vertical", min: 0, max: 140, step: 5, unit: "px/s" },
-  { key: "simultaneousTargets", label: "Inimigos simultâneos", min: 1, max: 6, step: 1, unit: "" },
+  { key: "simultaneousTargets", label: "Inimigos simultaneos", min: 1, max: 6, step: 1, unit: "" },
   { key: "depthLayers", label: "Camadas 3D", min: 1, max: 5, step: 1, unit: " layers" },
 ];
 
@@ -158,7 +158,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
           item.id === entitySelection.id
             ? {
                 ...item,
-                position: [transform.position[0], 0, transform.position[2]],
+                position: [Number(transform.position[0].toFixed(2)), 0, Number(transform.position[2].toFixed(2))],
                 height: Number(transform.position[1].toFixed(2)),
               }
             : item,
@@ -174,8 +174,8 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
         item.id === entitySelection.id
           ? {
               ...item,
-              position: [transform.position[0], 0, transform.position[2]],
-              rotation: [0, transform.rotation[1], 0],
+              position: [Number(transform.position[0].toFixed(2)), 0, Number(transform.position[2].toFixed(2))],
+              rotation: [0, Number(transform.rotation[1].toFixed(2)), 0],
               scale: Number(transform.scale.toFixed(2)),
             }
           : item,
@@ -214,9 +214,21 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
       applyDraft({
         ...draft,
         spawnPreset: "custom-spawn",
-        spawnNodes: (draft.spawnNodes ?? []).map((item) =>
-          item.id === selection.id ? { ...item, height: value } : item,
-        ),
+        spawnNodes: (draft.spawnNodes ?? []).map((item) => {
+          if (item.id !== selection.id) {
+            return item;
+          }
+
+          if (field === "posX") {
+            return { ...item, position: [value, 0, item.position[2]] };
+          }
+
+          if (field === "posZ") {
+            return { ...item, position: [item.position[0], 0, value] };
+          }
+
+          return { ...item, height: value };
+        }),
       });
       return;
     }
@@ -233,6 +245,14 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
           return { ...item, rotation: [0, value, 0] };
         }
 
+        if (field === "posX") {
+          return { ...item, position: [value, 0, item.position[2]] };
+        }
+
+        if (field === "posZ") {
+          return { ...item, position: [item.position[0], 0, value] };
+        }
+
         return { ...item, [field]: value };
       }),
     });
@@ -247,7 +267,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
       <div className="panel__header">
         <div>
           <span className="eyebrow">Map Editor</span>
-          <h2>Workspace 3D de criação</h2>
+          <h2>Workspace 3D de criacao</h2>
         </div>
         <div className="builder__header-actions">
           <button className="ghost-button" onClick={handleReset}>
@@ -265,7 +285,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
           <input value={draft.name} onChange={(event) => handleChange("name", event.target.value)} placeholder="Nome do mapa" />
         </label>
         <label className="field">
-          <span>Descrição</span>
+          <span>Descricao</span>
           <textarea rows="3" value={draft.description} onChange={(event) => handleChange("description", event.target.value)} placeholder="Qual habilidade esse mapa treina?" />
         </label>
       </div>
@@ -380,6 +400,14 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
             {selection && selectedItem ? (
               <div className="editor-inspector">
                 <strong>{selection.kind === "spawn" ? "Spawn Node" : getObstacleType(selectedItem.type).label}</strong>
+                <label className="field">
+                  <span>Posicao X</span>
+                  <input type="range" min="-30" max="30" step="1" value={selectedItem.position?.[0] ?? 0} onChange={(event) => handleInspectorChange("posX", Number(event.target.value))} />
+                </label>
+                <label className="field">
+                  <span>Posicao Z</span>
+                  <input type="range" min="-30" max="30" step="1" value={selectedItem.position?.[2] ?? 0} onChange={(event) => handleInspectorChange("posZ", Number(event.target.value))} />
+                </label>
                 {selection.kind === "spawn" ? (
                   <label className="field">
                     <span>Altura</span>
@@ -388,7 +416,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
                 ) : (
                   <>
                     <label className="field">
-                      <span>Rotação</span>
+                      <span>Rotacao</span>
                       <input type="range" min="-3.14" max="3.14" step="0.05" value={selectedItem.rotation?.[1] ?? 0} onChange={(event) => handleInspectorChange("rotation", Number(event.target.value))} />
                     </label>
                     <label className="field">
@@ -398,7 +426,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
                   </>
                 )}
                 <button type="button" className="delete-button" onClick={handleDeleteSelection}>
-                  Remover seleção
+                  Remover selecao
                 </button>
               </div>
             ) : (

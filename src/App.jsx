@@ -14,8 +14,8 @@ const RANK_STORAGE_KEY = "aimforge-rank-state";
 
 const ranks = [
   { id: "bronze", label: "Bronze", skill: 0, badge: "Entrada" },
-  { id: "silver", label: "Silver", skill: 1, badge: "Base sólida" },
-  { id: "gold", label: "Gold", skill: 2, badge: "Boa precisão" },
+  { id: "silver", label: "Silver", skill: 1, badge: "Base solida" },
+  { id: "gold", label: "Gold", skill: 2, badge: "Boa precisao" },
   { id: "platinum", label: "Platinum", skill: 3, badge: "Controle forte" },
   { id: "diamond", label: "Diamond", skill: 4, badge: "Elite" },
   { id: "master", label: "Master", skill: 5, badge: "Predador" },
@@ -179,38 +179,38 @@ export default function App() {
     return {
       ...mode,
       difficultyLabel: activeRank.label,
-      spawnRate: Math.max(180, mode.spawnRate - rankBoost * 28),
-      moveSpeed: mode.moveSpeed + rankBoost * 14,
-      strafeIntensity: mode.strafeIntensity + rankBoost * 8,
-      verticalDrift: mode.verticalDrift + rankBoost * 4,
-      targetLifetime: Math.max(500, mode.targetLifetime - rankBoost * 80),
-      goalHits: mode.goalHits + rankBoost * 2,
-      simultaneousTargets: Math.min(6, mode.simultaneousTargets + (rankBoost >= 3 ? 1 : 0)),
+      spawnRate: Math.max(260, mode.spawnRate - rankBoost * 14),
+      moveSpeed: mode.moveSpeed + rankBoost * 6,
+      strafeIntensity: mode.strafeIntensity + rankBoost * 4,
+      verticalDrift: mode.verticalDrift + rankBoost * 2,
+      targetLifetime: Math.max(700, mode.targetLifetime - rankBoost * 35),
+      goalHits: mode.goalHits + (rankBoost >= 3 ? 1 : 0),
+      simultaneousTargets: Math.min(5, mode.simultaneousTargets + (rankBoost >= 4 ? 1 : 0)),
     };
   };
 
   const updateAdaptiveRank = (rawStats) => {
     const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
-    const completionBonus = rawStats.completed ? 12 : -10;
-    const accuracyDelta = accuracy >= 88 ? 10 : accuracy >= 75 ? 4 : accuracy < 55 ? -8 : -2;
-    const comboDelta = rawStats.bestCombo >= 8 ? 4 : 0;
+    const completionBonus = rawStats.completed ? 14 : -4;
+    const accuracyDelta = accuracy >= 82 ? 12 : accuracy >= 68 ? 7 : accuracy >= 58 ? 2 : -4;
+    const comboDelta = rawStats.bestCombo >= 6 ? 4 : rawStats.bestCombo >= 3 ? 2 : 0;
     const totalDelta = completionBonus + accuracyDelta + comboDelta;
 
     setRankState((current) => {
       let nextPerformance = current.performanceScore + totalDelta;
       let nextRankIndex = current.rankIndex;
 
-      while (nextPerformance >= 20 && nextRankIndex < ranks.length - 1) {
-        nextPerformance -= 20;
+      while (nextPerformance >= 12 && nextRankIndex < ranks.length - 1) {
+        nextPerformance -= 12;
         nextRankIndex += 1;
       }
 
-      while (nextPerformance <= -20 && nextRankIndex > 0) {
-        nextPerformance += 20;
+      while (nextPerformance <= -28 && nextRankIndex > 0) {
+        nextPerformance += 12;
         nextRankIndex -= 1;
       }
 
-      nextPerformance = Math.max(-19, Math.min(19, nextPerformance));
+      nextPerformance = Math.max(-27, Math.min(27, nextPerformance));
 
       return {
         rankIndex: nextRankIndex,
@@ -290,7 +290,7 @@ export default function App() {
       password: authForm.password,
     });
 
-    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se o projeto exigir confirmação.");
+    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se o projeto exigir confirmacao.");
   };
 
   const handleSignIn = async () => {
@@ -312,7 +312,7 @@ export default function App() {
     }
 
     const { error } = await supabase.auth.signOut();
-    setAuthMessage(error ? error.message : "Sessão encerrada.");
+    setAuthMessage(error ? error.message : "Sessao encerrada.");
   };
 
   if (activeMode) {
@@ -326,8 +326,8 @@ export default function App() {
           <span className="eyebrow">AimForge 3D</span>
           <h1>Treino de mira com cenarios de flick, tracking, microajuste e reacao.</h1>
           <p>
-            Agora o jogo tem 47 mapas, FPS em primeira pessoa, inimigos 3D, objetivo por hits, tempo
-            para concluir, trilhas na pasta music e editor para criar novas rotas com obstáculos.
+            Agora o jogo vem com uma pool pronta de treinos de flick, tracking, micro-adjustment e reacao,
+            alem de editor 3D, musica, ranks adaptativos e mapas personalizados salvos na sua conta.
           </p>
         </div>
 
@@ -351,17 +351,15 @@ export default function App() {
             <span className="eyebrow">Rank ativo</span>
             <strong className="creator-id">{activeRank.label}</strong>
             <p>
-              Precisão alta e mapas concluídos sobem o rank. Precisão ruim e falhas repetidas reduzem
-              a dificuldade automaticamente.
+              Precisao alta e mapas concluidos sobem o rank. Precisao ruim reduz um pouco, mas agora a subida esta mais amigavel.
             </p>
           </article>
 
           <article className="settings-card">
-            <span className="eyebrow">Tendência atual</span>
+            <span className="eyebrow">Tendencia atual</span>
             <strong className="creator-id">{rankState.performanceScore}</strong>
             <p>
-              Quanto maior esse valor, mais agressivo fica o spawn, a velocidade dos inimigos e a meta
-              do mapa.
+              Quanto maior esse valor, mais leve fica o aumento de dificuldade. O sistema agora sobe rank com mais facilidade.
             </p>
           </article>
         </div>
@@ -418,4 +416,3 @@ export default function App() {
     </main>
   );
 }
-
