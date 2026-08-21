@@ -40,6 +40,17 @@ function withBuilderDefaults(draft) {
   };
 }
 
+function normalizeModeTuning(mode) {
+  return {
+    ...mode,
+    spawnRate: Math.min(1800, Math.round((mode.spawnRate ?? 600) * 1.32)),
+    targetLifetime: Math.min(5200, Math.round((mode.targetLifetime ?? 1600) * 1.45)),
+    moveSpeed: Math.max(6, Math.round((mode.moveSpeed ?? 20) * 0.4)),
+    strafeIntensity: Math.max(0, Math.round((mode.strafeIntensity ?? 0) * 0.42)),
+    verticalDrift: Math.max(0, Math.round((mode.verticalDrift ?? 0) * 0.4)),
+  };
+}
+
 const musicTracks = [
   ...baseMusicTracks,
   {
@@ -259,18 +270,19 @@ export default function App() {
   }, []);
 
   const applyRankDifficulty = (mode) => {
+    const baseMode = normalizeModeTuning(mode);
     const rankBoost = activeRank.skill;
 
     return {
-      ...mode,
+      ...baseMode,
       difficultyLabel: activeRank.label,
-      spawnRate: Math.max(420, mode.spawnRate - rankBoost * 6),
-      moveSpeed: mode.moveSpeed + rankBoost * 2,
-      strafeIntensity: mode.strafeIntensity + rankBoost * 1,
-      verticalDrift: mode.verticalDrift + rankBoost * 1,
-      targetLifetime: Math.max(1200, mode.targetLifetime - rankBoost * 10),
-      goalHits: mode.goalHits,
-      simultaneousTargets: mode.simultaneousTargets,
+      spawnRate: Math.max(560, baseMode.spawnRate - rankBoost * 8),
+      moveSpeed: baseMode.moveSpeed + rankBoost * 1,
+      strafeIntensity: baseMode.strafeIntensity + rankBoost * 1,
+      verticalDrift: baseMode.verticalDrift + Math.min(rankBoost, 2),
+      targetLifetime: Math.max(1700, baseMode.targetLifetime - rankBoost * 20),
+      goalHits: baseMode.goalHits,
+      simultaneousTargets: baseMode.simultaneousTargets,
     };
   };
 
@@ -346,7 +358,9 @@ export default function App() {
       .single();
 
     if (error) {
-      setSaveMessage(error.message);
+      setSaveMessage(
+        `${error.message}. Se estiver no Supabase, rode o arquivo supabase-schema.sql atualizado para liberar select e insert da tabela published_maps.`,
+      );
       return;
     }
 
