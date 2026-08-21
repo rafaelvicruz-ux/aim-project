@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+﻿import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls, Sparkles, Stars } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -193,9 +193,10 @@ function WeaponViewModel({ shotPulse }) {
     weaponRef.current.position.copy(camera.position);
     weaponRef.current.position.addScaledVector(forward, 0.7);
     weaponRef.current.position.addScaledVector(right, 0.24);
-    weaponRef.current.position.y -= 0.26 - Math.sin(performance.now() * 0.01) * 0.01;
+    weaponRef.current.position.y -= 0.26 - Math.sin(performance.now() * 0.01) * 0.015;
     weaponRef.current.quaternion.copy(camera.quaternion);
-    weaponRef.current.rotation.x -= shotPulse * 0.04;
+    weaponRef.current.rotation.x -= shotPulse * 0.06;
+    weaponRef.current.rotation.y += Math.sin(performance.now() * 0.004) * 0.005;
 
     if (flashRef.current) {
       flashRef.current.material.opacity = Math.max(0, flashRef.current.material.opacity - delta * 8);
@@ -221,6 +222,10 @@ function WeaponViewModel({ shotPulse }) {
       <mesh ref={flashRef} position={[0.12, -0.01, -0.72]}>
         <sphereGeometry args={[0.08, 10, 10]} />
         <meshBasicMaterial color="#ffd27f" transparent opacity={0} />
+      </mesh>
+      <mesh position={[0.12, 0.05, -0.32]} castShadow>
+        <boxGeometry args={[0.08, 0.05, 0.14]} />
+        <meshStandardMaterial color="#0f131b" metalness={0.72} roughness={0.22} />
       </mesh>
     </group>
   );
@@ -394,6 +399,25 @@ function HitBurst({ burst }) {
   );
 }
 
+function EnergyRing({ accentColor }) {
+  const ringRef = useRef(null);
+
+  useFrame(({ clock }) => {
+    if (!ringRef.current) {
+      return;
+    }
+
+    ringRef.current.rotation.z = clock.elapsedTime * 0.16;
+  });
+
+  return (
+    <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+      <ringGeometry args={[19, 19.45, 64]} />
+      <meshBasicMaterial color={accentColor} transparent opacity={0.16} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
 function ArenaProps({ arenaPrefab }) {
   if (arenaPrefab === "dock-lanes") {
     return (
@@ -519,6 +543,7 @@ function FpsScene({ enemies, bursts, obstacles, bindShooter, mode, sensitivity, 
       <fog attach="fog" args={["#070b14", 22, 76]} />
       <Stars radius={120} depth={42} count={2000} factor={4} saturation={0} fade speed={0.5} />
       <Sparkles count={36} scale={[80, 20, 80]} size={4} speed={0.35} color={arenaStyle.accentColor} />
+      <EnergyRing accentColor={arenaStyle.accentColor} />
       <ambientLight intensity={0.9} />
       <directionalLight position={[8, 16, 6]} intensity={1.55} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
       <spotLight position={[-10, 18, -6]} intensity={42} angle={0.35} penumbra={0.5} color={arenaStyle.accentColor} />
@@ -566,12 +591,14 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
   const [enemies, setEnemies] = useState([]);
   const [bursts, setBursts] = useState([]);
   const [shotPulse, setShotPulse] = useState(0);
+  const [hitMarker, setHitMarker] = useState(null);
   const [stats, setStats] = useState({ score: 0, shots: 0, hits: 0, misses: 0, combo: 0, bestCombo: 0, reactionTimes: [] });
 
   const lastSpawnAtRef = useRef(0);
   const rafRef = useRef(0);
   const startAtRef = useRef(performance.now());
   const endAtRef = useRef(startAtRef.current + mode.duration * 1000);
+  const previousTickRef = useRef(startAtRef.current);
   const finishedRef = useRef(false);
   const statsRef = useRef(stats);
   const shooterRef = useRef(null);
@@ -588,6 +615,15 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
     const timer = window.setTimeout(() => setShotPulse(0), 90);
     return () => window.clearTimeout(timer);
   }, [shotPulse]);
+
+  useEffect(() => {
+    if (!hitMarker) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setHitMarker(null), 380);
+    return () => window.clearTimeout(timer);
+  }, [hitMarker]);
 
   useEffect(() => {
     const finalize = (completed, remainingMs) => {
@@ -611,10 +647,14 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
     const tick = (now) => {
       const remainingMs = Math.max(0, endAtRef.current - now);
       const elapsedSeconds = (now - startAtRef.current) / 1000;
+      const deltaSeconds = Math.min(0.05, (now - previousTickRef.current) / 1000);
+      previousTickRef.current = now;
       setTimeLeft(Number((remainingMs / 1000).toFixed(1)));
 
       setEnemies((currentEnemies) => {
-        let nextEnemies = currentEnemies.filter((enemy) => enemy.expiresAt > now).map((enemy) => updateEnemy(enemy, mode, elapsedSeconds, 1 / 60));
+        let nextEnemies = currentEnemies
+          .filter((enemy) => enemy.expiresAt > now)
+          .map((enemy) => updateEnemy(enemy, mode, elapsedSeconds, deltaSeconds));
 
         while (
           now - lastSpawnAtRef.current >= mode.spawnRate &&
@@ -658,6 +698,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
       const shot = shooterRef.current();
 
       if (!shot?.enemyId) {
+        setHitMarker({ label: "MISS", tone: "miss" });
         setStats((currentStats) => ({ ...currentStats, shots: currentStats.shots + 1, misses: currentStats.misses + 1, combo: 0 }));
         return;
       }
@@ -672,6 +713,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         const wrongZone = mode.requireHeadshot && shot.hitZone !== "head";
 
         if (!isArmed || wrongZone) {
+          setHitMarker({ label: wrongZone ? "BODY" : "EARLY", tone: "miss" });
           setStats((currentStats) => ({
             ...currentStats,
             shots: currentStats.shots + 1,
@@ -682,6 +724,7 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
         }
 
         const reaction = performance.now() - target.armedAt;
+        setHitMarker({ label: shot.hitZone === "head" ? "HEADSHOT" : "HIT", tone: shot.hitZone === "head" ? "head" : "hit" });
         setStats((currentStats) => {
           const nextCombo = currentStats.combo + 1;
           return {
@@ -705,6 +748,25 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
   }, [mode]);
 
   const accuracy = useMemo(() => (stats.shots ? Math.round((stats.hits / stats.shots) * 100) : 100), [stats.hits, stats.shots]);
+  const avgReaction = useMemo(
+    () =>
+      stats.reactionTimes.length
+        ? Math.round(stats.reactionTimes.reduce((sum, value) => sum + value, 0) / stats.reactionTimes.length)
+        : 0,
+    [stats.reactionTimes],
+  );
+  const pressureLevel = useMemo(() => {
+    if (accuracy >= 85) {
+      return "Laser";
+    }
+    if (accuracy >= 65) {
+      return "Locked";
+    }
+    if (accuracy >= 45) {
+      return "Stable";
+    }
+    return "Warmup";
+  }, [accuracy]);
 
   return (
     <section className="arena-shell">
@@ -722,14 +784,16 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
       <div className="arena-shell__hud">
         <article><span>Tempo</span><strong>{timeLeft}s</strong></article>
         <article><span>Acertos</span><strong>{stats.hits}/{mode.goalHits}</strong></article>
-        <article><span>Precis�o</span><strong>{accuracy}%</strong></article>
+        <article><span>Precisão</span><strong>{accuracy}%</strong></article>
         <article><span>Score</span><strong>{stats.score}</strong></article>
         <article><span>Combo</span><strong>x{stats.combo}</strong></article>
         <article><span>Sens</span><strong>{settings.sensitivity.toFixed(2)}x</strong></article>
+        <article><span>Reação</span><strong>{avgReaction ? `${avgReaction}ms` : "--"}</strong></article>
+        <article><span>Estado</span><strong>{pressureLevel}</strong></article>
       </div>
 
       <div className="arena arena--3d-fps">
-        <Canvas shadows camera={{ fov: 75, near: 0.1, far: 150 }} className="arena__canvas">
+        <Canvas shadows dpr={[1, 1.8]} gl={{ antialias: true }} camera={{ fov: 75, near: 0.1, far: 150 }} className="arena__canvas">
           <FpsScene
             enemies={enemies}
             bursts={bursts}
@@ -743,6 +807,13 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
           />
         </Canvas>
         <div className={shotPulse ? "crosshair crosshair--fps crosshair--active" : "crosshair crosshair--fps"} />
+        {hitMarker ? <div className={`hit-marker hit-marker--${hitMarker.tone}`}>{hitMarker.label}</div> : null}
+        <div className="arena__chrome" />
+        <div className="arena__metrics">
+          <span>{mode.category ?? "Custom"}</span>
+          <span>{mode.pattern}</span>
+          <span>{mode.scoring}</span>
+        </div>
         <div className="arena__overlay">
           <button id="fps-lock-button" className="primary-button" type="button">Entrar no mapa</button>
           <p className="arena__helper">WASD para mover, mouse para mirar, clique para atirar.</p>
@@ -751,3 +822,4 @@ export function GameArena({ mode, settings, onFinish, onExit }) {
     </section>
   );
 }
+

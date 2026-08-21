@@ -180,6 +180,10 @@ button {
   margin-top: 20px;
 }
 
+.settings-grid--spotify {
+  grid-template-columns: 1.25fr 0.75fr;
+}
+
 .builder__meta-grid {
   grid-template-columns: 1fr 1fr;
   margin-top: 20px;
@@ -578,7 +582,7 @@ input[type="range"] {
 }
 
 .arena-shell__hud {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   margin: 22px 0;
 }
 
@@ -604,6 +608,16 @@ input[type="range"] {
     linear-gradient(180deg, #05070d 0%, #0d1420 35%, #101a2a 100%);
 }
 
+.arena__chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.35) 100%),
+    linear-gradient(180deg, rgba(117, 187, 255, 0.06), transparent 18%, transparent 82%, rgba(255, 138, 61, 0.08));
+  z-index: 1;
+}
+
 .arena__canvas {
   position: absolute !important;
   inset: 0;
@@ -627,6 +641,58 @@ input[type="range"] {
   margin: 0;
   color: #d8dfed;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.arena__metrics {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  z-index: 3;
+}
+
+.arena__metrics span,
+.hit-marker {
+  padding: 8px 12px;
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+}
+
+.arena__metrics span {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 11, 19, 0.58);
+  color: #e7eefb;
+  text-transform: capitalize;
+}
+
+.hit-marker {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 62px);
+  transform: translateX(-50%);
+  font-family: "Sora", sans-serif;
+  letter-spacing: 0.1em;
+  font-size: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 3;
+}
+
+.hit-marker--hit {
+  background: rgba(27, 92, 54, 0.72);
+  color: #d7ffe4;
+}
+
+.hit-marker--head {
+  background: rgba(117, 80, 8, 0.78);
+  color: #fff0be;
+}
+
+.hit-marker--miss {
+  background: rgba(115, 32, 32, 0.7);
+  color: #ffd0d0;
 }
 
 .crosshair {
@@ -677,6 +743,28 @@ input[type="range"] {
 .builder__status {
   margin: 16px 0 0;
   color: #d9e4f7;
+}
+
+.spotify-card,
+.spotify-controls,
+.spotify-status {
+  display: grid;
+  gap: 14px;
+}
+
+.spotify-status {
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(30, 215, 96, 0.1), rgba(117, 187, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.spotify-status span {
+  color: var(--text-muted);
+}
+
+.spotify-controls {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 @media (max-width: 1180px) {

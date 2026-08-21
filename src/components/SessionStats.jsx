@@ -1,4 +1,7 @@
-﻿export function SessionStats({ stats, modeName, onBack }) {
+export function SessionStats({ stats, modeName, onBack }) {
+  const performanceBand =
+    stats.accuracy >= 85 ? "Elite" : stats.accuracy >= 65 ? "Forte" : stats.accuracy >= 45 ? "Bom" : "Base";
+
   return (
     <section className="panel session-stats">
       <div className="panel__header">
@@ -13,8 +16,12 @@
 
       <div className="session-stats__grid">
         <article>
+          <span>Leitura</span>
+          <strong>{performanceBand}</strong>
+        </article>
+        <article>
           <span>Status</span>
-          <strong>{stats.completed ? "Concluído" : "Tempo esgotado"}</strong>
+          <strong>{stats.completed ? "Concluido" : "Tempo esgotado"}</strong>
         </article>
         <article>
           <span>Tempo gasto</span>
@@ -29,7 +36,7 @@
           <strong>{stats.goalHits}</strong>
         </article>
         <article>
-          <span>Precisão</span>
+          <span>Precisao</span>
           <strong>{stats.accuracy}%</strong>
         </article>
         <article>
@@ -41,7 +48,7 @@
           <strong>{stats.misses}</strong>
         </article>
         <article>
-          <span>Reação média</span>
+          <span>Reacao media</span>
           <strong>{stats.avgReaction}ms</strong>
         </article>
         <article>

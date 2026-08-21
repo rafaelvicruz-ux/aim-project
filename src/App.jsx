@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AuthPanel } from "./components/AuthPanel";
 import { GameArena } from "./components/GameArena";
 import { ModeCard } from "./components/ModeCard";
 import { SessionStats } from "./components/SessionStats";
@@ -6,6 +7,15 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { TrainingBuilder } from "./components/TrainingBuilder";
 import { musicTracks as baseMusicTracks } from "./data/gameConfig";
 import { customTemplate, defaultPresets, normalizeCustomDraft } from "./data/presets";
+import {
+  clearSpotifySession,
+  createSpotifyAuthUrl,
+  ensureSpotifyToken,
+  exchangeSpotifyCode,
+  getStoredSpotifySession,
+  isSpotifyConfigured,
+  spotifyRequest,
+} from "./lib/spotify";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
@@ -143,6 +153,9 @@ export default function App() {
   const [publishedModes, setPublishedModes] = useState([]);
   const [activeMode, setActiveMode] = useState(null);
   const [lastSession, setLastSession] = useState(null);
+  const [session, setSession] = useState(null);
+  const [authForm, setAuthForm] = useState({ email: "", password: "" });
+  const [authMessage, setAuthMessage] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const audioRef = useRef(null);
@@ -159,6 +172,10 @@ export default function App() {
       return { rankIndex: 0, performanceScore: 0 };
     }
   });
+  const [spotifySession, setSpotifySession] = useState(() => getStoredSpotifySession());
+  const [spotifyPlayback, setSpotifyPlayback] = useState(null);
+  const [spotifyStatus, setSpotifyStatus] = useState("");
+  const [spotifyBusy, setSpotifyBusy] = useState(false);
   const [settings, setSettings] = useState(() => {
     const savedSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     const defaults = {
@@ -216,6 +233,55 @@ export default function App() {
   }, [rankState]);
 
   useEffect(() => {
+    if (!isSpotifyConfigured) {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    const error = url.searchParams.get("error");
+
+    if (error) {
+      setSpotifyStatus(`Spotify: ${error}`);
+      return;
+    }
+
+    if (!code) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const finishSpotifyAuth = async () => {
+      try {
+        setSpotifyBusy(true);
+        const session = await exchangeSpotifyCode(code);
+        if (!cancelled) {
+          setSpotifySession(session);
+          setSpotifyStatus("Spotify conectado com sucesso.");
+          url.searchParams.delete("code");
+          url.searchParams.delete("state");
+          window.history.replaceState({}, "", url.toString());
+        }
+      } catch (authError) {
+        if (!cancelled) {
+          setSpotifyStatus(authError.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setSpotifyBusy(false);
+        }
+      }
+    };
+
+    finishSpotifyAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const queue = (settings.musicQueue ?? []).filter(Boolean);
 
     if (!queue.length) {
@@ -260,6 +326,65 @@ export default function App() {
       }
     };
   }, [settings.musicQueue, settings.musicVolume]);
+
+  useEffect(() => {
+    if (!spotifySession || !isSpotifyConfigured) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSpotifyPlayback = async () => {
+      try {
+        const refreshedSession = await ensureSpotifyToken(spotifySession);
+        if (!cancelled && refreshedSession !== spotifySession) {
+          setSpotifySession(refreshedSession);
+        }
+
+        const playback = await spotifyRequest(refreshedSession, "/me/player");
+        if (!cancelled) {
+          setSpotifyPlayback(playback);
+        }
+      } catch (playbackError) {
+        if (!cancelled) {
+          setSpotifyStatus(playbackError.message);
+        }
+      }
+    };
+
+    loadSpotifyPlayback();
+    const interval = window.setInterval(loadSpotifyPlayback, 15000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [spotifySession]);
+
+  useEffect(() => {
+    if (!supabase) {
+      return undefined;
+    }
+
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        setSession(data.session ?? null);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, nextSession) => {
+      setSession(nextSession);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -403,6 +528,84 @@ export default function App() {
     setActiveMode(null);
   };
 
+  const handleSpotifyConnect = async () => {
+    if (!isSpotifyConfigured) {
+      setSpotifyStatus("Configure VITE_SPOTIFY_CLIENT_ID e VITE_SPOTIFY_REDIRECT_URI para usar o Spotify.");
+      return;
+    }
+
+    const url = await createSpotifyAuthUrl();
+    window.location.href = url;
+  };
+
+  const handleSpotifyDisconnect = () => {
+    clearSpotifySession();
+    setSpotifySession(null);
+    setSpotifyPlayback(null);
+    setSpotifyStatus("Spotify desconectado.");
+  };
+
+  const handleSpotifyCommand = async (path, method = "PUT") => {
+    if (!spotifySession) {
+      setSpotifyStatus("Conecte o Spotify primeiro.");
+      return;
+    }
+
+    try {
+      setSpotifyBusy(true);
+      const refreshedSession = await ensureSpotifyToken(spotifySession);
+      if (refreshedSession !== spotifySession) {
+        setSpotifySession(refreshedSession);
+      }
+
+      await spotifyRequest(refreshedSession, path, { method });
+      const playback = await spotifyRequest(refreshedSession, "/me/player");
+      setSpotifyPlayback(playback);
+      setSpotifyStatus("Spotify atualizado.");
+    } catch (commandError) {
+      setSpotifyStatus(commandError.message);
+    } finally {
+      setSpotifyBusy(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!supabase) {
+      setAuthMessage("Configure o Supabase para criar conta.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signUp({
+      email: authForm.email,
+      password: authForm.password,
+    });
+
+    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se a confirmacao estiver ativa.");
+  };
+
+  const handleSignIn = async () => {
+    if (!supabase) {
+      setAuthMessage("Configure o Supabase para entrar.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authForm.email,
+      password: authForm.password,
+    });
+
+    setAuthMessage(error ? error.message : "Login realizado com sucesso.");
+  };
+
+  const handleSignOut = async () => {
+    if (!supabase) {
+      return;
+    }
+
+    const { error } = await supabase.auth.signOut();
+    setAuthMessage(error ? error.message : "Sessao encerrada.");
+  };
+
   if (activeMode) {
     return <GameArena mode={activeMode} settings={settings} onFinish={handleFinish} onExit={() => setActiveMode(null)} />;
   }
@@ -452,6 +655,17 @@ export default function App() {
           </article>
         </div>
       </section>
+
+      <AuthPanel
+        session={session}
+        authForm={authForm}
+        onAuthFormChange={setAuthForm}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
+        onSignOut={handleSignOut}
+        authMessage={authMessage}
+        isConfigured={isSupabaseConfigured}
+      />
 
       <section className="panel">
         <div className="panel__header">
@@ -506,8 +720,43 @@ export default function App() {
         </div>
       </section>
 
-      <SettingsPanel settings={settings} onSettingsChange={setSettings} musicTracks={musicTracks} />
+      <SettingsPanel
+        settings={settings}
+        onSettingsChange={setSettings}
+        musicTracks={musicTracks}
+        spotify={{
+          isConfigured: isSpotifyConfigured,
+          isConnected: Boolean(spotifySession),
+          isBusy: spotifyBusy,
+          status: spotifyStatus,
+          playback: spotifyPlayback,
+          onConnect: handleSpotifyConnect,
+          onDisconnect: handleSpotifyDisconnect,
+          onPlayPause: () =>
+            handleSpotifyCommand(spotifyPlayback?.is_playing ? "/me/player/pause" : "/me/player/play"),
+          onNext: () => handleSpotifyCommand("/me/player/next", "POST"),
+          onPrevious: () => handleSpotifyCommand("/me/player/previous", "POST"),
+          onRefresh: async () => {
+            if (!spotifySession) {
+              setSpotifyStatus("Conecte o Spotify primeiro.");
+              return;
+            }
 
+            try {
+              setSpotifyBusy(true);
+              const refreshedSession = await ensureSpotifyToken(spotifySession);
+              const playback = await spotifyRequest(refreshedSession, "/me/player");
+              setSpotifySession(refreshedSession);
+              setSpotifyPlayback(playback);
+              setSpotifyStatus("Estado do Spotify atualizado.");
+            } catch (refreshError) {
+              setSpotifyStatus(refreshError.message);
+            } finally {
+              setSpotifyBusy(false);
+            }
+          },
+        }}
+      />
       <TrainingBuilder
         draft={customDraft}
         onDraftChange={(nextDraft) => setCustomDraft(withBuilderDefaults(nextDraft))}

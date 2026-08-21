@@ -1,7 +1,7 @@
 const minSensitivity = 0.2;
 const maxSensitivity = 2.5;
 
-export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
+export function SettingsPanel({ settings, onSettingsChange, musicTracks, spotify }) {
   const activeQueue = settings.musicQueue ?? [];
 
   const handleSensitivityChange = (event) => {
@@ -91,6 +91,66 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
             onChange={handleMusicVolumeChange}
           />
           <p>Marque varias musicas para montar uma fila. Elas vao tocar na ordem em que voce clicou.</p>
+        </article>
+      </div>
+
+      <div className="settings-grid settings-grid--spotify">
+        <article className="settings-card spotify-card">
+          <div className="panel__header">
+            <div>
+              <span className="eyebrow">Spotify</span>
+              <h2>Streaming conectado</h2>
+            </div>
+            {spotify?.isConnected ? (
+              <button type="button" className="ghost-button" onClick={spotify.onDisconnect} disabled={spotify.isBusy}>
+                Desconectar
+              </button>
+            ) : (
+              <button type="button" className="primary-button" onClick={spotify?.onConnect} disabled={!spotify?.isConfigured || spotify?.isBusy}>
+                Conectar Spotify
+              </button>
+            )}
+          </div>
+
+          <div className="spotify-status">
+            <strong>
+              {spotify?.playback?.item?.name
+                ? spotify.playback.item.name
+                : spotify?.isConnected
+                  ? "Spotify conectado"
+                  : "Spotify nao conectado"}
+            </strong>
+            <span>
+              {spotify?.playback?.item?.artists?.length
+                ? spotify.playback.item.artists.map((artist) => artist.name).join(", ")
+                : spotify?.status || "Conecte sua conta para mostrar a musica atual e controlar a reproducao."}
+            </span>
+          </div>
+
+          <div className="spotify-controls">
+            <button type="button" className="ghost-button" onClick={spotify?.onPrevious} disabled={!spotify?.isConnected || spotify?.isBusy}>
+              Voltar
+            </button>
+            <button type="button" className="primary-button" onClick={spotify?.onPlayPause} disabled={!spotify?.isConnected || spotify?.isBusy}>
+              {spotify?.playback?.is_playing ? "Pausar" : "Tocar"}
+            </button>
+            <button type="button" className="ghost-button" onClick={spotify?.onNext} disabled={!spotify?.isConnected || spotify?.isBusy}>
+              Proxima
+            </button>
+            <button type="button" className="ghost-button" onClick={spotify?.onRefresh} disabled={!spotify?.isConnected || spotify?.isBusy}>
+              Atualizar
+            </button>
+          </div>
+        </article>
+
+        <article className="settings-card">
+          <span className="eyebrow">Notas</span>
+          <p>
+            O Spotify web usa login do usuario e, para controle de playback completo, normalmente precisa de conta Premium.
+          </p>
+          <p>
+            Para ativar aqui no projeto, preencha `VITE_SPOTIFY_CLIENT_ID` e `VITE_SPOTIFY_REDIRECT_URI` no `.env`.
+          </p>
         </article>
       </div>
     </section>
