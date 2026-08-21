@@ -1,27 +1,25 @@
 create extension if not exists pgcrypto;
 
-create table if not exists public.custom_maps (
+create table if not exists public.published_maps (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  author text not null,
   description text not null,
   config jsonb not null,
   created_at timestamptz not null default now()
 );
 
-alter table public.custom_maps enable row level security;
+alter table public.published_maps enable row level security;
 
-create policy "Users can read their own maps"
-on public.custom_maps
+drop policy if exists "Anyone can read published maps" on public.published_maps;
+drop policy if exists "Anyone can insert published maps" on public.published_maps;
+
+create policy "Anyone can read published maps"
+on public.published_maps
 for select
-using (auth.uid() = user_id);
+using (true);
 
-create policy "Users can insert their own maps"
-on public.custom_maps
+create policy "Anyone can insert published maps"
+on public.published_maps
 for insert
-with check (auth.uid() = user_id);
-
-create policy "Users can delete their own maps"
-on public.custom_maps
-for delete
-using (auth.uid() = user_id);
+with check (true);

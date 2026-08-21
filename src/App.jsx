@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameArena } from "./components/GameArena";
-import { AuthPanel } from "./components/AuthPanel";
 import { ModeCard } from "./components/ModeCard";
 import { SessionStats } from "./components/SessionStats";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TrainingBuilder } from "./components/TrainingBuilder";
-import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { musicTracks } from "./data/gameConfig";
-import { customTemplate, defaultPresets } from "./data/presets";
+import { customTemplate, defaultPresets, normalizeCustomDraft } from "./data/presets";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
 const RANK_STORAGE_KEY = "aimforge-rank-state";
+const DRAFT_STORAGE_KEY = "aimforge-builder-draft";
 
 const ranks = [
   { id: "bronze", label: "Bronze", skill: 0, badge: "Entrada" },
@@ -41,14 +41,24 @@ function buildSummary(rawStats) {
 }
 
 export default function App() {
-  const [customDraft, setCustomDraft] = useState(customTemplate);
-  const [customModes, setCustomModes] = useState([]);
+  const [customDraft, setCustomDraft] = useState(() => {
+    const savedDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+
+    if (!savedDraft) {
+      return customTemplate;
+    }
+
+    try {
+      return normalizeCustomDraft({ ...customTemplate, ...JSON.parse(savedDraft) });
+    } catch {
+      return customTemplate;
+    }
+  });
+  const [publishedModes, setPublishedModes] = useState([]);
   const [activeMode, setActiveMode] = useState(null);
   const [lastSession, setLastSession] = useState(null);
-  const [session, setSession] = useState(null);
-  const [authForm, setAuthForm] = useState({ email: "", password: "" });
-  const [authMessage, setAuthMessage] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const audioRef = useRef(null);
   const [rankState, setRankState] = useState(() => {
     const savedRank = window.localStorage.getItem(RANK_STORAGE_KEY);
@@ -83,11 +93,27 @@ export default function App() {
   });
 
   const activeRank = ranks[Math.min(rankState.rankIndex, ranks.length - 1)];
-  const allModes = useMemo(() => [...defaultPresets, ...customModes], [customModes]);
+  const filteredPublishedModes = useMemo(() => {
+    const normalizedTerm = searchTerm.trim().toLowerCase();
+
+    if (!normalizedTerm) {
+      return publishedModes;
+    }
+
+    return publishedModes.filter((mode) =>
+      [mode.name, mode.description, mode.author, mode.category]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(normalizedTerm)),
+    );
+  }, [publishedModes, searchTerm]);
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(customDraft));
+  }, [customDraft]);
 
   useEffect(() => {
     window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(rankState));
@@ -119,39 +145,13 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) {
-      return undefined;
-    }
-
-    let mounted = true;
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session ?? null);
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, nextSession) => {
-      setSession(nextSession);
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!supabase || !session?.user) {
-      setCustomModes([]);
       return;
     }
 
     const loadMaps = async () => {
       const { data, error } = await supabase
-        .from("custom_maps")
-        .select("id, name, description, config, created_at")
+        .from("published_maps")
+        .select("id, name, author, description, config, created_at")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -163,15 +163,16 @@ export default function App() {
         id: row.id,
         ...row.config,
         name: row.name,
+        author: row.author,
         description: row.description,
-        creatorId: session.user.id,
+        category: row.config?.category ?? "Comunidade",
       }));
 
-      setCustomModes(normalizedMaps);
+      setPublishedModes(normalizedMaps);
     };
 
     loadMaps();
-  }, [session]);
+  }, []);
 
   const applyRankDifficulty = (mode) => {
     const rankBoost = activeRank.skill;
@@ -191,8 +192,8 @@ export default function App() {
 
   const updateAdaptiveRank = (rawStats) => {
     const accuracy = rawStats.shots ? Math.round((rawStats.hits / rawStats.shots) * 100) : 100;
-    const completionBonus = rawStats.completed ? 18 : -2;
-    const accuracyDelta = accuracy >= 70 ? 12 : accuracy >= 55 ? 7 : accuracy >= 40 ? 3 : -2;
+    const completionBonus = rawStats.completed ? 10 : 0;
+    const accuracyDelta = accuracy >= 65 ? 8 : accuracy >= 50 ? 5 : accuracy >= 35 ? 2 : -1;
     const comboDelta = rawStats.bestCombo >= 4 ? 4 : rawStats.bestCombo >= 2 ? 2 : 0;
     const totalDelta = completionBonus + accuracyDelta + comboDelta;
 
@@ -200,17 +201,17 @@ export default function App() {
       let nextPerformance = current.performanceScore + totalDelta;
       let nextRankIndex = current.rankIndex;
 
-      while (nextPerformance >= 8 && nextRankIndex < ranks.length - 1) {
-        nextPerformance -= 12;
+      while (nextPerformance >= 10 && nextRankIndex < ranks.length - 1) {
+        nextPerformance -= 10;
         nextRankIndex += 1;
       }
 
-      while (nextPerformance <= -40 && nextRankIndex > 0) {
-        nextPerformance += 8;
+      while (nextPerformance <= -12 && nextRankIndex > 0) {
+        nextPerformance += 10;
         nextRankIndex -= 1;
       }
 
-      nextPerformance = Math.max(-39, Math.min(23, nextPerformance));
+      nextPerformance = Math.max(-11, Math.min(19, nextPerformance));
 
       return {
         rankIndex: nextRankIndex,
@@ -223,23 +224,37 @@ export default function App() {
     setActiveMode(applyRankDifficulty(mode));
   };
 
-  const handleSaveCustomMode = async () => {
-    if (!supabase || !session?.user) {
-      setSaveMessage("Entre na sua conta para salvar mapas no Supabase.");
+  const handlePreviewDraft = () => {
+    setActiveMode(
+      applyRankDifficulty({
+        ...customDraft,
+        id: "builder-preview",
+        name: customDraft.name?.trim() ? `Teste: ${customDraft.name.trim()}` : "Teste do mapa",
+        category: "Preview",
+      }),
+    );
+    setSaveMessage("Preview iniciado sem publicar.");
+  };
+
+  const handlePublishCustomMode = async ({ title, author, description }) => {
+    if (!supabase) {
+      setSaveMessage("Configure o Supabase para publicar mapas da comunidade.");
       return;
     }
 
     const nextMode = {
       ...customDraft,
-      name: customDraft.name.trim() || "Meu mapa 3D",
-      description: customDraft.description.trim() || "Mapa personalizado.",
+      name: title.trim() || customDraft.name.trim() || "Meu mapa 3D",
+      author: author.trim() || "Anonimo",
+      description: description.trim() || customDraft.description.trim() || "Mapa publicado pela comunidade.",
+      category: customDraft.category?.trim?.() || "Comunidade",
     };
 
     const { data, error } = await supabase
-      .from("custom_maps")
+      .from("published_maps")
       .insert({
-        user_id: session.user.id,
         name: nextMode.name,
+        author: nextMode.author,
         description: nextMode.description,
         config: nextMode,
       })
@@ -251,68 +266,20 @@ export default function App() {
       return;
     }
 
-    setCustomModes((currentModes) => [{ ...nextMode, id: data.id, creatorId: session.user.id }, ...currentModes]);
-    setSaveMessage("Mapa salvo com sucesso.");
-  };
-
-  const handleDeleteCustomMode = async (modeId) => {
-    if (!supabase || !session?.user) {
-      return;
-    }
-
-    const { error } = await supabase.from("custom_maps").delete().eq("id", modeId);
-
-    if (error) {
-      setSaveMessage(error.message);
-      return;
-    }
-
-    setCustomModes((currentModes) => currentModes.filter((mode) => mode.id !== modeId));
-    setSaveMessage("Mapa deletado.");
+    setPublishedModes((currentModes) => [{ ...nextMode, id: data.id }, ...currentModes]);
+    setSaveMessage("Mapa publicado com sucesso. Ele ja aparece na busca da comunidade.");
   };
 
   const handleFinish = (rawStats) => {
-    updateAdaptiveRank(rawStats);
+    if (activeMode?.id !== "builder-preview") {
+      updateAdaptiveRank(rawStats);
+    }
+
     setLastSession({
       modeName: activeMode.name,
       stats: buildSummary(rawStats),
     });
     setActiveMode(null);
-  };
-
-  const handleSignUp = async () => {
-    if (!supabase) {
-      return;
-    }
-
-    const { error } = await supabase.auth.signUp({
-      email: authForm.email,
-      password: authForm.password,
-    });
-
-    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se o projeto exigir confirmacao.");
-  };
-
-  const handleSignIn = async () => {
-    if (!supabase) {
-      return;
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: authForm.email,
-      password: authForm.password,
-    });
-
-    setAuthMessage(error ? error.message : "Login realizado com sucesso.");
-  };
-
-  const handleSignOut = async () => {
-    if (!supabase) {
-      return;
-    }
-
-    const { error } = await supabase.auth.signOut();
-    setAuthMessage(error ? error.message : "Sessao encerrada.");
   };
 
   if (activeMode) {
@@ -327,7 +294,7 @@ export default function App() {
           <h1>Treino de mira com cenarios de flick, tracking, microajuste e reacao.</h1>
           <p>
             Agora o jogo vem com uma pool pronta de treinos de flick, tracking, micro-adjustment e reacao,
-            alem de editor 3D, musica, ranks adaptativos e mapas personalizados salvos na sua conta.
+            alem de editor 3D, musica, ranks adaptativos, preview instantaneo e publicacao aberta para a comunidade.
           </p>
         </div>
 
@@ -359,39 +326,61 @@ export default function App() {
             <span className="eyebrow">Tendencia atual</span>
             <strong className="creator-id">{rankState.performanceScore}</strong>
             <p>
-              Quanto maior esse valor, mais leve fica o aumento de dificuldade. O sistema agora sobe rank com mais facilidade.
+              Quanto maior esse valor, mais facil fica subir de rank. O sistema agora esta mais amigavel e pune menos.
             </p>
           </article>
         </div>
       </section>
 
-      <AuthPanel
-        session={session}
-        authForm={authForm}
-        onAuthFormChange={setAuthForm}
-        onSignIn={handleSignIn}
-        onSignUp={handleSignUp}
-        onSignOut={handleSignOut}
-        authMessage={authMessage}
-        isConfigured={isSupabaseConfigured}
-      />
-
       <section className="panel">
         <div className="panel__header">
           <div>
             <span className="eyebrow">Map Pool</span>
-            <h2>Escolha um mapa</h2>
+            <h2>Treinos prontos</h2>
           </div>
         </div>
 
         <div className="mode-grid">
-          {allModes.map((mode) => (
-            <ModeCard
-              key={mode.id}
-              mode={applyRankDifficulty(mode)}
-              onStart={handleStartMode}
-              onDelete={mode.creatorId === session?.user?.id ? handleDeleteCustomMode : undefined}
-            />
+          {defaultPresets.map((mode) => (
+            <ModeCard key={mode.id} mode={applyRankDifficulty(mode)} onStart={handleStartMode} />
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel__header">
+          <div>
+            <span className="eyebrow">Community Maps</span>
+            <h2>Pesquisar mapas publicados</h2>
+          </div>
+        </div>
+
+        <div className="creator-grid">
+          <article className="settings-card">
+            <label className="field">
+              <span>Buscar por titulo, autor ou descricao</span>
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Ex.: flick, tracking, Rafael"
+              />
+            </label>
+            <p>
+              {isSupabaseConfigured
+                ? `${filteredPublishedModes.length} mapa(s) encontrados na comunidade.`
+                : "Configure o Supabase para liberar a biblioteca publica de mapas."}
+            </p>
+          </article>
+
+          <article className="settings-card">
+            <span className="eyebrow">Como funciona</span>
+            <p>Voce monta o mapa no editor, testa sem publicar e so depois envia para a comunidade com titulo, autor e descricao.</p>
+          </article>
+        </div>
+
+        <div className="mode-grid">
+          {filteredPublishedModes.map((mode) => (
+            <ModeCard key={mode.id} mode={applyRankDifficulty(mode)} onStart={handleStartMode} />
           ))}
         </div>
       </section>
@@ -401,9 +390,9 @@ export default function App() {
       <TrainingBuilder
         draft={customDraft}
         onDraftChange={setCustomDraft}
-        onSave={handleSaveCustomMode}
-        canSave={Boolean(session?.user)}
-        saveMessage={saveMessage}
+        onPreview={handlePreviewDraft}
+        onPublish={handlePublishCustomMode}
+        publishMessage={saveMessage}
       />
 
       {lastSession && (

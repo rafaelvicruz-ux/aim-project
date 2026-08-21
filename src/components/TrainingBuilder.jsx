@@ -54,9 +54,15 @@ function createPresetSpawnNodes(spawnPresetId) {
   }));
 }
 
-export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMessage }) {
+export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, publishMessage }) {
   const [selection, setSelection] = useState(null);
   const [transformMode, setTransformMode] = useState("translate");
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState({
+    title: draft.name ?? "Meu mapa 3D",
+    author: "",
+    description: draft.description ?? "",
+  });
 
   const applyDraft = (nextDraft) => {
     onDraftChange(normalizeDraft(nextDraft));
@@ -72,7 +78,28 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
   const handleReset = () => {
     setSelection(null);
     setTransformMode("translate");
+    setPublishOpen(false);
     onDraftChange(customTemplate);
+  };
+
+  const handleOpenPublish = () => {
+    setPublishForm({
+      title: draft.name?.trim() || "Meu mapa 3D",
+      author: publishForm.author,
+      description: draft.description?.trim() || "Mapa criado pela comunidade.",
+    });
+    setPublishOpen((current) => !current);
+  };
+
+  const handlePublishChange = (field, value) => {
+    setPublishForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const handlePublishSubmit = () => {
+    onPublish(publishForm);
   };
 
   const handleBlueprintApply = (blueprint) => {
@@ -273,8 +300,11 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
           <button className="ghost-button" onClick={handleReset}>
             Resetar
           </button>
-          <button className="primary-button" onClick={onSave} disabled={!canSave}>
-            {canSave ? "Salvar mapa" : "Entre para salvar"}
+          <button className="ghost-button" onClick={onPreview}>
+            Testar sem publicar
+          </button>
+          <button className="primary-button" onClick={handleOpenPublish}>
+            {publishOpen ? "Fechar publicacao" : "Publicar mapa"}
           </button>
         </div>
       </div>
@@ -289,6 +319,44 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
           <textarea rows="3" value={draft.description} onChange={(event) => handleChange("description", event.target.value)} placeholder="Qual habilidade esse mapa treina?" />
         </label>
       </div>
+
+      {publishOpen ? (
+        <div className="builder__meta-grid">
+          <label className="field">
+            <span>Titulo publicado</span>
+            <input
+              value={publishForm.title}
+              onChange={(event) => handlePublishChange("title", event.target.value)}
+              placeholder="Nome que aparecera para todo mundo"
+            />
+          </label>
+          <label className="field">
+            <span>Autor</span>
+            <input
+              value={publishForm.author}
+              onChange={(event) => handlePublishChange("author", event.target.value)}
+              placeholder="Seu nome ou nick"
+            />
+          </label>
+          <label className="field">
+            <span>Descricao publica</span>
+            <textarea
+              rows="3"
+              value={publishForm.description}
+              onChange={(event) => handlePublishChange("description", event.target.value)}
+              placeholder="Explique o treino e o estilo do mapa"
+            />
+          </label>
+          <div className="settings-card builder__publish-card">
+            <span className="eyebrow">Fluxo</span>
+            <strong>Teste antes, publique depois</strong>
+            <p>Esse envio vai deixar o mapa visivel para qualquer pessoa na aba de pesquisa.</p>
+            <button type="button" className="primary-button" onClick={handlePublishSubmit}>
+              Confirmar publicacao
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="editor-workspace">
         <aside className="editor-sidebar settings-card">
@@ -465,7 +533,7 @@ export function TrainingBuilder({ draft, onDraftChange, onSave, canSave, saveMes
         ))}
       </div>
 
-      {saveMessage ? <p className="builder__status">{saveMessage}</p> : null}
+      {publishMessage ? <p className="builder__status">{publishMessage}</p> : null}
     </section>
   );
 }
