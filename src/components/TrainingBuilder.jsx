@@ -107,7 +107,46 @@ const defaultCodeWorkspace = {
   codeComponent: logicPresets[0].component,
   codeSystems: logicPresets[0].systems,
   codeNotes: "Use esta area para scripts React, HUD customizada e regras do mapa.",
+  scriptAreas: [
+    {
+      id: "hud-script",
+      name: "HUD Script",
+      type: "component",
+      code: `export function TrainingHud({ combo, score }) {
+  return (
+    <div className="training-hud">
+      <strong>Combo {combo}</strong>
+      <span>Score {score}</span>
+    </div>
+  );
+}`,
+    },
+    {
+      id: "spawn-director",
+      name: "Spawn Director",
+      type: "system",
+      code: `export function setupSpawnDirector({ setSpawnModifier }) {
+  setSpawnModifier(1);
+}`,
+    },
+  ],
 };
+
+const scriptAreaTypes = [
+  { id: "component", label: "React Component" },
+  { id: "system", label: "Gameplay System" },
+  { id: "trigger", label: "Trigger Logic" },
+  { id: "service", label: "Data Service" },
+];
+
+function createScriptArea() {
+  return {
+    id: `script-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+    name: "Novo Script",
+    type: "component",
+    code: `export function NovoScript() {\n  return null;\n}`,
+  };
+}
 
 function normalizeDraft(nextDraft) {
   return {
@@ -131,6 +170,7 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
   const [selection, setSelection] = useState(null);
   const [transformMode, setTransformMode] = useState("translate");
   const [publishOpen, setPublishOpen] = useState(false);
+  const [selectedScriptId, setSelectedScriptId] = useState(draft.scriptAreas?.[0]?.id ?? defaultCodeWorkspace.scriptAreas[0].id);
   const [publishForm, setPublishForm] = useState({
     title: draft.name ?? "Meu mapa 3D",
     author: "",
@@ -196,6 +236,34 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
     applyDraft({
       ...draft,
       [field]: value,
+    });
+  };
+
+  const handleAddScriptArea = () => {
+    const nextScript = createScriptArea();
+    setSelectedScriptId(nextScript.id);
+    applyDraft({
+      ...draft,
+      scriptAreas: [...(draft.scriptAreas ?? defaultCodeWorkspace.scriptAreas), nextScript],
+    });
+  };
+
+  const handleScriptAreaChange = (scriptId, field, value) => {
+    applyDraft({
+      ...draft,
+      scriptAreas: (draft.scriptAreas ?? defaultCodeWorkspace.scriptAreas).map((script) =>
+        script.id === scriptId ? { ...script, [field]: value } : script,
+      ),
+    });
+  };
+
+  const handleRemoveScriptArea = (scriptId) => {
+    const nextScripts = (draft.scriptAreas ?? defaultCodeWorkspace.scriptAreas).filter((script) => script.id !== scriptId);
+    const fallbackScripts = nextScripts.length ? nextScripts : [createScriptArea()];
+    setSelectedScriptId(fallbackScripts[0].id);
+    applyDraft({
+      ...draft,
+      scriptAreas: fallbackScripts,
     });
   };
 
@@ -385,6 +453,11 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
   const selectedArena = arenaPrefabs.find((item) => item.id === draft.arenaPrefab) ?? arenaPrefabs[0];
   const selectedSpawnPreset = spawnPresets.find((item) => item.id === draft.spawnPreset);
   const selectedKit = obstacleKits.find((item) => item.id === draft.obstacleKit);
+  const scriptAreas = draft.scriptAreas ?? defaultCodeWorkspace.scriptAreas;
+  const selectedScript =
+    scriptAreas.find((script) => script.id === selectedScriptId) ??
+    scriptAreas[0] ??
+    defaultCodeWorkspace.scriptAreas[0];
   const generatedSceneComponent = useMemo(() => `import { Canvas } from "@react-three/fiber";
 
 const mapConfig = ${JSON.stringify(
@@ -405,13 +478,15 @@ ${draft.codeComponent ?? defaultCodeWorkspace.codeComponent}
 
 ${draft.codeSystems ?? defaultCodeWorkspace.codeSystems}
 
+${scriptAreas.map((script) => script.code).join("\n\n")}
+
 export function CustomTrainingScene() {
   return (
     <Canvas>
       {/* Use mapConfig, prefabs e scripts acima para ligar a logica do treino */}
     </Canvas>
   );
-}`, [draft]);
+}`, [draft, scriptAreas]);
 
   return (
     <section className="panel builder builder--workspace">
@@ -687,6 +762,9 @@ export function CustomTrainingScene() {
               <span className="eyebrow">Code Studio</span>
               <h2>Scripts React do mapa</h2>
             </div>
+            <button type="button" className="ghost-button" onClick={handleAddScriptArea}>
+              Criar area de script
+            </button>
           </div>
           <label className="field">
             <span>Componente de interface</span>
@@ -713,6 +791,60 @@ export function CustomTrainingScene() {
               placeholder="Checklist de gameplay, eventos, VFX, ideias de balanceamento..."
             />
           </label>
+
+          <div className="script-area-builder">
+            <div className="script-area-list">
+              {scriptAreas.map((script) => (
+                <button
+                  key={script.id}
+                  type="button"
+                  className={selectedScript?.id === script.id ? "prefab-card prefab-card--active" : "prefab-card"}
+                  onClick={() => setSelectedScriptId(script.id)}
+                >
+                  <strong>{script.name}</strong>
+                  <span>{scriptAreaTypes.find((item) => item.id === script.type)?.label ?? script.type}</span>
+                </button>
+              ))}
+            </div>
+
+            {selectedScript ? (
+              <div className="script-area-editor">
+                <div className="script-area-editor__meta">
+                  <label className="field">
+                    <span>Nome da area</span>
+                    <input
+                      value={selectedScript.name}
+                      onChange={(event) => handleScriptAreaChange(selectedScript.id, "name", event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Tipo</span>
+                    <select
+                      value={selectedScript.type}
+                      onChange={(event) => handleScriptAreaChange(selectedScript.id, "type", event.target.value)}
+                    >
+                      {scriptAreaTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Codigo do script</span>
+                  <textarea
+                    rows="12"
+                    value={selectedScript.code}
+                    onChange={(event) => handleScriptAreaChange(selectedScript.id, "code", event.target.value)}
+                  />
+                </label>
+                <button type="button" className="delete-button" onClick={() => handleRemoveScriptArea(selectedScript.id)}>
+                  Remover area de script
+                </button>
+              </div>
+            ) : null}
+          </div>
         </article>
 
         <article className="settings-card code-studio__panel">

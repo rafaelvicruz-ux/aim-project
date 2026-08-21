@@ -31,6 +31,29 @@ export function useMapLogic({ mode, setSpawnModifier, setRewardRule }) {
   }, [mode, setRewardRule, setSpawnModifier]);
 }`,
   codeNotes: "Use esta area para scripts React, HUD customizada e regras do mapa.",
+  scriptAreas: [
+    {
+      id: "hud-script",
+      name: "HUD Script",
+      type: "component",
+      code: `export function TrainingHud({ combo, score }) {
+  return (
+    <div className="training-hud">
+      <strong>Combo {combo}</strong>
+      <span>Score {score}</span>
+    </div>
+  );
+}`,
+    },
+    {
+      id: "spawn-director",
+      name: "Spawn Director",
+      type: "system",
+      code: `export function setupSpawnDirector({ setSpawnModifier }) {
+  setSpawnModifier(1);
+}`,
+    },
+  ],
 };
 
 function withBuilderDefaults(draft) {

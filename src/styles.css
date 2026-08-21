@@ -545,6 +545,34 @@ input[type="range"] {
   line-height: 1.5;
 }
 
+.script-area-builder,
+.script-area-list,
+.script-area-editor,
+.script-area-editor__meta {
+  display: grid;
+  gap: 14px;
+}
+
+.script-area-builder {
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: start;
+}
+
+.script-area-list {
+  align-content: start;
+}
+
+.script-area-editor {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.script-area-editor__meta {
+  grid-template-columns: 1fr 1fr;
+}
+
 .builder__publish-card {
   align-content: start;
 }
@@ -669,6 +697,8 @@ input[type="range"] {
   .builder__scoring,
   .builder__patterns,
   .code-studio,
+  .script-area-builder,
+  .script-area-editor__meta,
   .arena-shell__hud,
   .session-stats__grid,
   .creator-grid,
