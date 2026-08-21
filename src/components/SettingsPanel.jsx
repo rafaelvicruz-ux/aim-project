@@ -1,7 +1,9 @@
-﻿const minSensitivity = 0.2;
+const minSensitivity = 0.2;
 const maxSensitivity = 2.5;
 
 export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
+  const activeQueue = settings.musicQueue ?? [];
+
   const handleSensitivityChange = (event) => {
     onSettingsChange({
       ...settings,
@@ -9,10 +11,14 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
     });
   };
 
-  const handleMusicTrackChange = (event) => {
+  const handleMusicToggle = (trackId) => {
+    const nextQueue = activeQueue.includes(trackId)
+      ? activeQueue.filter((id) => id !== trackId)
+      : [...activeQueue, trackId];
+
     onSettingsChange({
       ...settings,
-      musicTrack: event.target.value,
+      musicQueue: nextQueue,
     });
   };
 
@@ -28,7 +34,7 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
       <div className="panel__header">
         <div>
           <span className="eyebrow">Settings</span>
-          <h2>Sensibilidade e música</h2>
+          <h2>Sensibilidade e musica</h2>
         </div>
       </div>
 
@@ -47,22 +53,31 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
             onChange={handleSensitivityChange}
           />
           <p>
-            Valores menores deixam a mira mais controlada. Valores maiores deixam a mira mais rápida.
+            Valores menores deixam a mira mais controlada. Valores maiores deixam a mira mais rapida.
           </p>
         </article>
 
         <article className="settings-card">
-          <span className="eyebrow">Música</span>
-          <label className="field">
-            <span>Faixa ativa</span>
-            <select value={settings.musicTrack} onChange={handleMusicTrackChange}>
-              {musicTracks.map((track) => (
-                <option key={track.id} value={track.id}>
-                  {track.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="eyebrow">Musica</span>
+          <div className="music-queue">
+            {musicTracks.map((track) => {
+              const queuePosition = activeQueue.indexOf(track.id);
+
+              return (
+                <label key={track.id} className={queuePosition >= 0 ? "music-track music-track--active" : "music-track"}>
+                  <input
+                    type="checkbox"
+                    checked={queuePosition >= 0}
+                    onChange={() => handleMusicToggle(track.id)}
+                  />
+                  <div>
+                    <strong>{track.name}</strong>
+                    <span>{queuePosition >= 0 ? `Toca na ordem ${queuePosition + 1}` : "Clique para adicionar na fila"}</span>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
           <div className="field__row">
             <span>Volume</span>
             <strong>{Math.round(settings.musicVolume * 100)}%</strong>
@@ -75,7 +90,7 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
             value={settings.musicVolume}
             onChange={handleMusicVolumeChange}
           />
-          <p>Escolha a faixa da pasta `music` e ajuste o volume ao lado da sensibilidade.</p>
+          <p>Marque varias musicas para montar uma fila. Elas vao tocar na ordem em que voce clicou.</p>
         </article>
       </div>
     </section>

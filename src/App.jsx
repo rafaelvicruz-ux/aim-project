@@ -4,13 +4,65 @@ import { ModeCard } from "./components/ModeCard";
 import { SessionStats } from "./components/SessionStats";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TrainingBuilder } from "./components/TrainingBuilder";
-import { musicTracks } from "./data/gameConfig";
+import { musicTracks as baseMusicTracks } from "./data/gameConfig";
 import { customTemplate, defaultPresets, normalizeCustomDraft } from "./data/presets";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
 const RANK_STORAGE_KEY = "aimforge-rank-state";
 const DRAFT_STORAGE_KEY = "aimforge-builder-draft";
+const BUILDER_SCRIPT_DEFAULTS = {
+  logicPreset: "react-wave-manager",
+  codeComponent: `export function MapLogicHUD({ combo, score, timeLeft }) {
+  return (
+    <div className="map-logic-hud">
+      <strong>Combo {combo}</strong>
+      <span>Score {score}</span>
+      <span>{timeLeft}s restantes</span>
+    </div>
+  );
+}`,
+  codeSystems: `import { useEffect } from "react";
+
+export function useMapLogic({ mode, setSpawnModifier, setRewardRule }) {
+  useEffect(() => {
+    setSpawnModifier(mode.pattern === "burst" ? 0.92 : 1);
+    setRewardRule(mode.scoring === "combo" ? "combo-chain" : "precision-hold");
+  }, [mode, setRewardRule, setSpawnModifier]);
+}`,
+  codeNotes: "Use esta area para scripts React, HUD customizada e regras do mapa.",
+};
+
+function withBuilderDefaults(draft) {
+  return {
+    ...BUILDER_SCRIPT_DEFAULTS,
+    ...draft,
+  };
+}
+
+const musicTracks = [
+  ...baseMusicTracks,
+  {
+    id: "dance-playful-night",
+    name: "Dance Playful Night",
+    src: new URL("../music/alexzavesa-dance-playful-night-510786.mp3", import.meta.url).href,
+  },
+  {
+    id: "gvidon-medicine",
+    name: "Gvidon Medicine",
+    src: new URL("../music/gvidon-gvidon-medicine-364031.mp3", import.meta.url).href,
+  },
+  {
+    id: "aj-background-music",
+    name: "AJ Background Music",
+    src: new URL("../music/ikoliks_aj-background-music-320427.mp3", import.meta.url).href,
+  },
+  {
+    id: "water-afro-pop",
+    name: "Water Afro Pop",
+    src: new URL("../music/kontraa-water-afro-pop-music-445661.mp3", import.meta.url).href,
+  },
+];
 
 const ranks = [
   { id: "bronze", label: "Bronze", skill: 0, badge: "Entrada" },
@@ -45,13 +97,13 @@ export default function App() {
     const savedDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
 
     if (!savedDraft) {
-      return customTemplate;
+      return withBuilderDefaults(customTemplate);
     }
 
     try {
-      return normalizeCustomDraft({ ...customTemplate, ...JSON.parse(savedDraft) });
+      return normalizeCustomDraft(withBuilderDefaults({ ...customTemplate, ...JSON.parse(savedDraft) }));
     } catch {
-      return customTemplate;
+      return withBuilderDefaults(customTemplate);
     }
   });
   const [publishedModes, setPublishedModes] = useState([]);
@@ -77,7 +129,7 @@ export default function App() {
     const savedSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     const defaults = {
       sensitivity: 1,
-      musicTrack: musicTracks[0]?.id ?? "escape-love",
+      musicQueue: [musicTracks[0]?.id ?? "escape-your-love"],
       musicVolume: 0.45,
     };
 
@@ -86,7 +138,17 @@ export default function App() {
     }
 
     try {
-      return { ...defaults, ...JSON.parse(savedSettings) };
+      const parsedSettings = JSON.parse(savedSettings);
+      return {
+        ...defaults,
+        ...parsedSettings,
+        musicQueue:
+          parsedSettings.musicQueue?.length
+            ? parsedSettings.musicQueue
+            : parsedSettings.musicTrack
+              ? [parsedSettings.musicTrack]
+              : defaults.musicQueue,
+      };
     } catch {
       return defaults;
     }
@@ -120,28 +182,50 @@ export default function App() {
   }, [rankState]);
 
   useEffect(() => {
-    const selectedTrack = musicTracks.find((track) => track.id === settings.musicTrack) ?? musicTracks[0];
+    const queue = (settings.musicQueue ?? []).filter(Boolean);
 
-    if (!selectedTrack) {
+    if (!queue.length) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       return undefined;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    let cancelled = false;
+    let queueIndex = 0;
 
-    const audio = new Audio(selectedTrack.src);
-    audio.loop = true;
-    audio.volume = settings.musicVolume;
-    audioRef.current = audio;
-    audio.play().catch(() => {});
+    const playTrackAt = (index) => {
+      const nextTrack = musicTracks.find((track) => track.id === queue[index]) ?? musicTracks[0];
+
+      if (!nextTrack || cancelled) {
+        return;
+      }
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+
+      const audio = new Audio(nextTrack.src);
+      audio.volume = settings.musicVolume;
+      audioRef.current = audio;
+      audio.onended = () => {
+        queueIndex = (queueIndex + 1) % queue.length;
+        playTrackAt(queueIndex);
+      };
+      audio.play().catch(() => {});
+    };
+
+    playTrackAt(queueIndex);
 
     return () => {
-      audio.pause();
-      audio.currentTime = 0;
+      cancelled = true;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
     };
-  }, [settings.musicTrack, settings.musicVolume]);
+  }, [settings.musicQueue, settings.musicVolume]);
 
   useEffect(() => {
     if (!supabase) {
@@ -389,7 +473,7 @@ export default function App() {
 
       <TrainingBuilder
         draft={customDraft}
-        onDraftChange={setCustomDraft}
+        onDraftChange={(nextDraft) => setCustomDraft(withBuilderDefaults(nextDraft))}
         onPreview={handlePreviewDraft}
         onPublish={handlePublishCustomMode}
         publishMessage={saveMessage}

@@ -35,6 +35,79 @@ const rangeFields = [
 ];
 
 const transformModes = ["translate", "rotate", "scale"];
+const logicPresets = [
+  {
+    id: "react-wave-manager",
+    label: "Wave Manager",
+    description: "Controla ondas, dificuldade e recompensas no estilo de uma scene tool.",
+    component: `export function MapLogicHUD({ combo, score, timeLeft }) {
+  return (
+    <div className="map-logic-hud">
+      <strong>Combo {combo}</strong>
+      <span>Score {score}</span>
+      <span>{timeLeft}s restantes</span>
+    </div>
+  );
+}`,
+    systems: `import { useEffect } from "react";
+
+export function useMapLogic({ mode, setSpawnModifier, setRewardRule }) {
+  useEffect(() => {
+    setSpawnModifier(mode.pattern === "burst" ? 0.92 : 1);
+    setRewardRule(mode.scoring === "combo" ? "combo-chain" : "precision-hold");
+  }, [mode, setRewardRule, setSpawnModifier]);
+}`,
+  },
+  {
+    id: "react-boss-phase",
+    label: "Boss Phase",
+    description: "Cria um ciclo de fase especial com alvo elite, pausas e mudancas visuais.",
+    component: `export function BossWaveBanner({ phase, pressure }) {
+  return (
+    <div className="boss-wave-banner">
+      <strong>Fase {phase}</strong>
+      <span>Pressao {pressure}%</span>
+    </div>
+  );
+}`,
+    systems: `import { useEffect } from "react";
+
+export function useBossPhase({ elapsedTime, setSpawnModifier, setTargetScale }) {
+  useEffect(() => {
+    const phase = elapsedTime > 20 ? 2 : 1;
+    setSpawnModifier(phase === 2 ? 0.82 : 1);
+    setTargetScale(phase === 2 ? 0.88 : 1);
+  }, [elapsedTime, setSpawnModifier, setTargetScale]);
+}`,
+  },
+  {
+    id: "react-training-director",
+    label: "Training Director",
+    description: "Organiza checkpoints, mensagens e comportamento adaptativo do treino.",
+    component: `export function DirectorFeed({ message, streak }) {
+  return (
+    <div className="director-feed">
+      <strong>{message}</strong>
+      <span>Streak {streak}</span>
+    </div>
+  );
+}`,
+    systems: `import { useEffect } from "react";
+
+export function useTrainingDirector({ accuracy, setHint, setSpawnModifier }) {
+  useEffect(() => {
+    setHint(accuracy < 45 ? "Diminua a velocidade e centralize a mira." : "Bom ritmo, mantenha o tracking.");
+    setSpawnModifier(accuracy < 45 ? 1.08 : 0.96);
+  }, [accuracy, setHint, setSpawnModifier]);
+}`,
+  },
+];
+const defaultCodeWorkspace = {
+  logicPreset: logicPresets[0].id,
+  codeComponent: logicPresets[0].component,
+  codeSystems: logicPresets[0].systems,
+  codeNotes: "Use esta area para scripts React, HUD customizada e regras do mapa.",
+};
 
 function normalizeDraft(nextDraft) {
   return {
@@ -65,7 +138,12 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
   });
 
   const applyDraft = (nextDraft) => {
-    onDraftChange(normalizeDraft(nextDraft));
+    onDraftChange(
+      normalizeDraft({
+        ...defaultCodeWorkspace,
+        ...nextDraft,
+      }),
+    );
   };
 
   const handleChange = (key, value) => {
@@ -79,7 +157,10 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
     setSelection(null);
     setTransformMode("translate");
     setPublishOpen(false);
-    onDraftChange(customTemplate);
+    onDraftChange({
+      ...customTemplate,
+      ...defaultCodeWorkspace,
+    });
   };
 
   const handleOpenPublish = () => {
@@ -100,6 +181,22 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
 
   const handlePublishSubmit = () => {
     onPublish(publishForm);
+  };
+
+  const handleLogicPresetApply = (preset) => {
+    applyDraft({
+      ...draft,
+      logicPreset: preset.id,
+      codeComponent: preset.component,
+      codeSystems: preset.systems,
+    });
+  };
+
+  const handleCodeFieldChange = (field, value) => {
+    applyDraft({
+      ...draft,
+      [field]: value,
+    });
   };
 
   const handleBlueprintApply = (blueprint) => {
@@ -288,6 +385,33 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
   const selectedArena = arenaPrefabs.find((item) => item.id === draft.arenaPrefab) ?? arenaPrefabs[0];
   const selectedSpawnPreset = spawnPresets.find((item) => item.id === draft.spawnPreset);
   const selectedKit = obstacleKits.find((item) => item.id === draft.obstacleKit);
+  const generatedSceneComponent = useMemo(() => `import { Canvas } from "@react-three/fiber";
+
+const mapConfig = ${JSON.stringify(
+    {
+      name: draft.name,
+      arenaPrefab: draft.arenaPrefab,
+      spawnPreset: draft.spawnPreset,
+      obstacleCount: draft.obstacles?.length ?? 0,
+      spawnCount: draft.spawnNodes?.length ?? 0,
+      scoring: draft.scoring,
+      pattern: draft.pattern,
+    },
+    null,
+    2,
+  )};
+
+${draft.codeComponent ?? defaultCodeWorkspace.codeComponent}
+
+${draft.codeSystems ?? defaultCodeWorkspace.codeSystems}
+
+export function CustomTrainingScene() {
+  return (
+    <Canvas>
+      {/* Use mapConfig, prefabs e scripts acima para ligar a logica do treino */}
+    </Canvas>
+  );
+}`, [draft]);
 
   return (
     <section className="panel builder builder--workspace">
@@ -531,6 +655,79 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
             {option.label}
           </button>
         ))}
+      </div>
+
+      <div className="code-studio">
+        <article className="settings-card code-studio__panel">
+          <div className="panel__header">
+            <div>
+              <span className="eyebrow">Logic Blocks</span>
+              <h2>Blocos no estilo engine</h2>
+            </div>
+          </div>
+          <div className="builder__cards builder__cards--single">
+            {logicPresets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={draft.logicPreset === preset.id ? "prefab-card prefab-card--active" : "prefab-card"}
+                onClick={() => handleLogicPresetApply(preset)}
+              >
+                <strong>{preset.label}</strong>
+                <span>{preset.description}</span>
+              </button>
+            ))}
+          </div>
+          <p>Esses blocos funcionam como um ponto de partida para ligar HUD, regras de spawn e comportamento do treino.</p>
+        </article>
+
+        <article className="settings-card code-studio__panel">
+          <div className="panel__header">
+            <div>
+              <span className="eyebrow">Code Studio</span>
+              <h2>Scripts React do mapa</h2>
+            </div>
+          </div>
+          <label className="field">
+            <span>Componente de interface</span>
+            <textarea
+              rows="10"
+              value={draft.codeComponent ?? defaultCodeWorkspace.codeComponent}
+              onChange={(event) => handleCodeFieldChange("codeComponent", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Sistemas e hooks</span>
+            <textarea
+              rows="12"
+              value={draft.codeSystems ?? defaultCodeWorkspace.codeSystems}
+              onChange={(event) => handleCodeFieldChange("codeSystems", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Notas do mapa</span>
+            <textarea
+              rows="5"
+              value={draft.codeNotes ?? defaultCodeWorkspace.codeNotes}
+              onChange={(event) => handleCodeFieldChange("codeNotes", event.target.value)}
+              placeholder="Checklist de gameplay, eventos, VFX, ideias de balanceamento..."
+            />
+          </label>
+        </article>
+
+        <article className="settings-card code-studio__panel">
+          <div className="panel__header">
+            <div>
+              <span className="eyebrow">React Export</span>
+              <h2>Base gerada do mapa</h2>
+            </div>
+          </div>
+          <label className="field">
+            <span>Snippet inicial</span>
+            <textarea rows="22" value={generatedSceneComponent} readOnly />
+          </label>
+          <p>Isso nao executa o codigo sozinho ainda, mas te entrega uma base real em React para evoluir o mapa como uma mini scene tool.</p>
+        </article>
       </div>
 
       {publishMessage ? <p className="builder__status">{publishMessage}</p> : null}

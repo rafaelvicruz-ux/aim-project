@@ -165,6 +165,7 @@ button {
 .builder__ranges,
 .builder__scoring,
 .builder__patterns,
+.code-studio,
 .creator-grid,
 .builder__cards,
 .builder__meta-grid,
@@ -197,6 +198,11 @@ button {
 
 .builder__cards {
   grid-template-columns: 1fr;
+}
+
+.code-studio {
+  grid-template-columns: 0.85fr 1.15fr 1fr;
+  margin-top: 22px;
 }
 
 .settings-card,
@@ -374,6 +380,44 @@ button {
   min-height: 88px;
 }
 
+.music-queue {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.music-track {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.music-track input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.music-track strong,
+.code-studio__panel strong {
+  display: block;
+}
+
+.music-track span {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.music-track--active {
+  border-color: rgba(255, 138, 61, 0.34);
+  background: linear-gradient(180deg, rgba(255, 138, 61, 0.14), rgba(117, 187, 255, 0.05));
+}
+
 .field--range {
   padding: 16px;
 }
@@ -495,6 +539,16 @@ input[type="range"] {
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.code-studio__panel textarea {
+  min-height: 180px;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  line-height: 1.5;
+}
+
+.builder__publish-card {
+  align-content: start;
+}
+
 .arena-shell__hud {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   margin: 22px 0;
@@ -614,6 +668,7 @@ input[type="range"] {
   .builder__ranges,
   .builder__scoring,
   .builder__patterns,
+  .code-studio,
   .arena-shell__hud,
   .session-stats__grid,
   .creator-grid,
