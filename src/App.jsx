@@ -4,23 +4,18 @@ import { GameArena } from "./components/GameArena";
 import { ModeCard } from "./components/ModeCard";
 import { SessionStats } from "./components/SessionStats";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { SpotifyPanel } from "./components/SpotifyPanel";
 import { TrainingBuilder } from "./components/TrainingBuilder";
+import { defaultCrosshair } from "./components/game/GameHud";
 import { musicTracks as baseMusicTracks } from "./data/gameConfig";
-import { customTemplate, defaultPresets, normalizeCustomDraft } from "./data/presets";
-import {
-  clearSpotifySession,
-  createSpotifyAuthUrl,
-  ensureSpotifyToken,
-  exchangeSpotifyCode,
-  getStoredSpotifySession,
-  isSpotifyConfigured,
-  spotifyRequest,
-} from "./lib/spotify";
+import { customTemplate, defaultPresets, normalizeCustomDraft, presetCategories } from "./data/presets";
+import { useSpotify } from "./hooks/useSpotify";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const SETTINGS_STORAGE_KEY = "aimforge-settings";
 const RANK_STORAGE_KEY = "aimforge-rank-state";
 const DRAFT_STORAGE_KEY = "aimforge-builder-draft";
+
 const BUILDER_SCRIPT_DEFAULTS = {
   logicPreset: "react-wave-manager",
   codeComponent: `export function MapLogicHUD({ combo, score, timeLeft }) {
@@ -40,7 +35,7 @@ export function useMapLogic({ mode, setSpawnModifier, setRewardRule }) {
     setRewardRule(mode.scoring === "combo" ? "combo-chain" : "precision-hold");
   }, [mode, setRewardRule, setSpawnModifier]);
 }`,
-  codeNotes: "Use esta area para scripts React, HUD customizada e regras do mapa.",
+  codeNotes: "Use esta área para scripts React, HUD customizada e regras do mapa.",
   scriptAreas: [
     {
       id: "hud-script",
@@ -67,10 +62,7 @@ export function useMapLogic({ mode, setSpawnModifier, setRewardRule }) {
 };
 
 function withBuilderDefaults(draft) {
-  return {
-    ...BUILDER_SCRIPT_DEFAULTS,
-    ...draft,
-  };
+  return { ...BUILDER_SCRIPT_DEFAULTS, ...draft };
 }
 
 function normalizeModeTuning(mode) {
@@ -110,8 +102,8 @@ const musicTracks = [
 
 const ranks = [
   { id: "bronze", label: "Bronze", skill: 0, badge: "Entrada" },
-  { id: "silver", label: "Silver", skill: 1, badge: "Base solida" },
-  { id: "gold", label: "Gold", skill: 2, badge: "Boa precisao" },
+  { id: "silver", label: "Silver", skill: 1, badge: "Base sólida" },
+  { id: "gold", label: "Gold", skill: 2, badge: "Boa precisão" },
   { id: "platinum", label: "Platinum", skill: 3, badge: "Controle forte" },
   { id: "diamond", label: "Diamond", skill: 4, badge: "Elite" },
   { id: "master", label: "Master", skill: 5, badge: "Predador" },
@@ -136,6 +128,16 @@ function buildSummary(rawStats) {
   };
 }
 
+const defaultSettings = {
+  sensitivity: 1,
+  musicQueue: [musicTracks[0]?.id ?? "escape-your-love"],
+  musicVolume: 0.45,
+  quality: "high",
+  crosshair: defaultCrosshair,
+  showFeed: true,
+  showTrackInGame: true,
+};
+
 export default function App() {
   const [customDraft, setCustomDraft] = useState(() => {
     const savedDraft = window.localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -158,7 +160,9 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [presetCategory, setPresetCategory] = useState("Todos");
   const audioRef = useRef(null);
+
   const [rankState, setRankState] = useState(() => {
     const savedRank = window.localStorage.getItem(RANK_STORAGE_KEY);
 
@@ -172,40 +176,44 @@ export default function App() {
       return { rankIndex: 0, performanceScore: 0 };
     }
   });
-  const [spotifySession, setSpotifySession] = useState(() => getStoredSpotifySession());
-  const [spotifyPlayback, setSpotifyPlayback] = useState(null);
-  const [spotifyStatus, setSpotifyStatus] = useState("");
-  const [spotifyBusy, setSpotifyBusy] = useState(false);
+
   const [settings, setSettings] = useState(() => {
     const savedSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    const defaults = {
-      sensitivity: 1,
-      musicQueue: [musicTracks[0]?.id ?? "escape-your-love"],
-      musicVolume: 0.45,
-    };
 
     if (!savedSettings) {
-      return defaults;
+      return defaultSettings;
     }
 
     try {
       const parsedSettings = JSON.parse(savedSettings);
       return {
-        ...defaults,
+        ...defaultSettings,
         ...parsedSettings,
-        musicQueue:
-          parsedSettings.musicQueue?.length
-            ? parsedSettings.musicQueue
-            : parsedSettings.musicTrack
-              ? [parsedSettings.musicTrack]
-              : defaults.musicQueue,
+        crosshair: { ...defaultCrosshair, ...(parsedSettings.crosshair ?? {}) },
+        musicQueue: parsedSettings.musicQueue?.length
+          ? parsedSettings.musicQueue
+          : parsedSettings.musicTrack
+            ? [parsedSettings.musicTrack]
+            : defaultSettings.musicQueue,
       };
     } catch {
-      return defaults;
+      return defaultSettings;
     }
   });
 
+  const spotify = useSpotify();
+  const spotifyPlayingInApp = spotify.usingAppPlayer && spotify.nowPlaying?.paused === false;
+
   const activeRank = ranks[Math.min(rankState.rankIndex, ranks.length - 1)];
+
+  const visiblePresets = useMemo(() => {
+    if (presetCategory === "Todos") {
+      return defaultPresets;
+    }
+
+    return defaultPresets.filter((preset) => preset.category === presetCategory);
+  }, [presetCategory]);
+
   const filteredPublishedModes = useMemo(() => {
     const normalizedTerm = searchTerm.trim().toLowerCase();
 
@@ -232,59 +240,11 @@ export default function App() {
     window.localStorage.setItem(RANK_STORAGE_KEY, JSON.stringify(rankState));
   }, [rankState]);
 
-  useEffect(() => {
-    if (!isSpotifyConfigured) {
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get("code");
-    const error = url.searchParams.get("error");
-
-    if (error) {
-      setSpotifyStatus(`Spotify: ${error}`);
-      return;
-    }
-
-    if (!code) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const finishSpotifyAuth = async () => {
-      try {
-        setSpotifyBusy(true);
-        const session = await exchangeSpotifyCode(code);
-        if (!cancelled) {
-          setSpotifySession(session);
-          setSpotifyStatus("Spotify conectado com sucesso.");
-          url.searchParams.delete("code");
-          url.searchParams.delete("state");
-          window.history.replaceState({}, "", url.toString());
-        }
-      } catch (authError) {
-        if (!cancelled) {
-          setSpotifyStatus(authError.message);
-        }
-      } finally {
-        if (!cancelled) {
-          setSpotifyBusy(false);
-        }
-      }
-    };
-
-    finishSpotifyAuth();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  // fila local: o Spotify tocando dentro do app tem prioridade
   useEffect(() => {
     const queue = (settings.musicQueue ?? []).filter(Boolean);
 
-    if (!queue.length) {
+    if (!queue.length || spotifyPlayingInApp) {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -325,41 +285,7 @@ export default function App() {
         audioRef.current.currentTime = 0;
       }
     };
-  }, [settings.musicQueue, settings.musicVolume]);
-
-  useEffect(() => {
-    if (!spotifySession || !isSpotifyConfigured) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadSpotifyPlayback = async () => {
-      try {
-        const refreshedSession = await ensureSpotifyToken(spotifySession);
-        if (!cancelled && refreshedSession !== spotifySession) {
-          setSpotifySession(refreshedSession);
-        }
-
-        const playback = await spotifyRequest(refreshedSession, "/me/player");
-        if (!cancelled) {
-          setSpotifyPlayback(playback);
-        }
-      } catch (playbackError) {
-        if (!cancelled) {
-          setSpotifyStatus(playbackError.message);
-        }
-      }
-    };
-
-    loadSpotifyPlayback();
-    const interval = window.setInterval(loadSpotifyPlayback, 15000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [spotifySession]);
+  }, [settings.musicQueue, settings.musicVolume, spotifyPlayingInApp]);
 
   useEffect(() => {
     if (!supabase) {
@@ -425,12 +351,10 @@ export default function App() {
       ...baseMode,
       difficultyLabel: activeRank.label,
       spawnRate: Math.max(560, baseMode.spawnRate - rankBoost * 8),
-      moveSpeed: baseMode.moveSpeed + rankBoost * 1,
-      strafeIntensity: baseMode.strafeIntensity + rankBoost * 1,
+      moveSpeed: baseMode.moveSpeed + rankBoost,
+      strafeIntensity: baseMode.strafeIntensity + rankBoost,
       verticalDrift: baseMode.verticalDrift + Math.min(rankBoost, 2),
       targetLifetime: Math.max(1700, baseMode.targetLifetime - rankBoost * 20),
-      goalHits: baseMode.goalHits,
-      simultaneousTargets: baseMode.simultaneousTargets,
     };
   };
 
@@ -457,18 +381,17 @@ export default function App() {
 
       nextPerformance = Math.max(-11, Math.min(19, nextPerformance));
 
-      return {
-        rankIndex: nextRankIndex,
-        performanceScore: nextPerformance,
-      };
+      return { rankIndex: nextRankIndex, performanceScore: nextPerformance };
     });
   };
 
   const handleStartMode = (mode) => {
+    setLastSession(null);
     setActiveMode(applyRankDifficulty(mode));
   };
 
   const handlePreviewDraft = () => {
+    setLastSession(null);
     setActiveMode(
       applyRankDifficulty({
         ...customDraft,
@@ -489,7 +412,7 @@ export default function App() {
     const nextMode = {
       ...customDraft,
       name: title.trim() || customDraft.name.trim() || "Meu mapa 3D",
-      author: author.trim() || "Anonimo",
+      author: author.trim() || "Anônimo",
       description: description.trim() || customDraft.description.trim() || "Mapa publicado pela comunidade.",
       category: customDraft.category?.trim?.() || "Comunidade",
     };
@@ -513,7 +436,7 @@ export default function App() {
     }
 
     setPublishedModes((currentModes) => [{ ...nextMode, id: data.id }, ...currentModes]);
-    setSaveMessage("Mapa publicado com sucesso. Ele ja aparece na busca da comunidade.");
+    setSaveMessage("Mapa publicado com sucesso. Ele já aparece na busca da comunidade.");
   };
 
   const handleFinish = (rawStats) => {
@@ -528,59 +451,14 @@ export default function App() {
     setActiveMode(null);
   };
 
-  const handleSpotifyConnect = async () => {
-    if (!isSpotifyConfigured) {
-      setSpotifyStatus("Configure VITE_SPOTIFY_CLIENT_ID e VITE_SPOTIFY_REDIRECT_URI para usar o Spotify.");
-      return;
-    }
-
-    const url = await createSpotifyAuthUrl();
-    window.location.href = url;
-  };
-
-  const handleSpotifyDisconnect = () => {
-    clearSpotifySession();
-    setSpotifySession(null);
-    setSpotifyPlayback(null);
-    setSpotifyStatus("Spotify desconectado.");
-  };
-
-  const handleSpotifyCommand = async (path, method = "PUT") => {
-    if (!spotifySession) {
-      setSpotifyStatus("Conecte o Spotify primeiro.");
-      return;
-    }
-
-    try {
-      setSpotifyBusy(true);
-      const refreshedSession = await ensureSpotifyToken(spotifySession);
-      if (refreshedSession !== spotifySession) {
-        setSpotifySession(refreshedSession);
-      }
-
-      await spotifyRequest(refreshedSession, path, { method });
-      const playback = await spotifyRequest(refreshedSession, "/me/player");
-      setSpotifyPlayback(playback);
-      setSpotifyStatus("Spotify atualizado.");
-    } catch (commandError) {
-      setSpotifyStatus(commandError.message);
-    } finally {
-      setSpotifyBusy(false);
-    }
-  };
-
   const handleSignUp = async () => {
     if (!supabase) {
       setAuthMessage("Configure o Supabase para criar conta.");
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
-      email: authForm.email,
-      password: authForm.password,
-    });
-
-    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se a confirmacao estiver ativa.");
+    const { error } = await supabase.auth.signUp({ email: authForm.email, password: authForm.password });
+    setAuthMessage(error ? error.message : "Conta criada. Verifique seu email se a confirmação estiver ativa.");
   };
 
   const handleSignIn = async () => {
@@ -589,11 +467,7 @@ export default function App() {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: authForm.email,
-      password: authForm.password,
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email: authForm.email, password: authForm.password });
     setAuthMessage(error ? error.message : "Login realizado com sucesso.");
   };
 
@@ -603,11 +477,20 @@ export default function App() {
     }
 
     const { error } = await supabase.auth.signOut();
-    setAuthMessage(error ? error.message : "Sessao encerrada.");
+    setAuthMessage(error ? error.message : "Sessão encerrada.");
   };
 
   if (activeMode) {
-    return <GameArena mode={activeMode} settings={settings} onFinish={handleFinish} onExit={() => setActiveMode(null)} />;
+    return (
+      <GameArena
+        mode={activeMode}
+        settings={settings}
+        nowPlaying={spotify.nowPlaying}
+        onSensitivityChange={(value) => setSettings((current) => ({ ...current, sensitivity: value }))}
+        onFinish={handleFinish}
+        onExit={() => setActiveMode(null)}
+      />
+    );
   }
 
   return (
@@ -615,44 +498,20 @@ export default function App() {
       <section className="hero">
         <div className="hero__content">
           <span className="eyebrow">AimForge 3D</span>
-          <h1>Treino de mira com cenarios de flick, tracking, microajuste e reacao.</h1>
+          <h1>Treino de mira com cenários de flick, tracking, microajuste e reação.</h1>
           <p>
-            Agora o jogo vem com uma pool pronta de treinos de flick, tracking, micro-adjustment e reacao,
-            alem de editor 3D, musica, ranks adaptativos, preview instantaneo e publicacao aberta para a comunidade.
+            Pool pronta de treinos, editor 3D com snap e undo, HUD competitiva, ranks adaptativos, preview instantâneo,
+            publicação aberta para a comunidade e Spotify tocando dentro do próprio app.
           </p>
         </div>
 
         <div className="hero__badge">
-          <span>Rank Atual</span>
+          <span>Rank atual</span>
           <strong>{activeRank.label}</strong>
           <span className="hero__rank-note">{activeRank.badge}</span>
-        </div>
-      </section>
-
-      <section className="panel panel--rank">
-        <div className="panel__header">
-          <div>
-            <span className="eyebrow">Adaptive Rank</span>
-            <h2>Dificuldade que reage ao seu desempenho</h2>
+          <div className="hero__rank-bar">
+            <div style={{ width: `${Math.max(0, Math.min(100, ((rankState.performanceScore + 12) / 22) * 100))}%` }} />
           </div>
-        </div>
-
-        <div className="creator-grid">
-          <article className="settings-card">
-            <span className="eyebrow">Rank ativo</span>
-            <strong className="creator-id">{activeRank.label}</strong>
-            <p>
-              Precisao alta e mapas concluidos sobem o rank. Precisao ruim reduz um pouco, mas agora a subida esta mais amigavel.
-            </p>
-          </article>
-
-          <article className="settings-card">
-            <span className="eyebrow">Tendencia atual</span>
-            <strong className="creator-id">{rankState.performanceScore}</strong>
-            <p>
-              Quanto maior esse valor, mais facil fica subir de rank. O sistema agora esta mais amigavel e pune menos.
-            </p>
-          </article>
         </div>
       </section>
 
@@ -673,10 +532,22 @@ export default function App() {
             <span className="eyebrow">Map Pool</span>
             <h2>Treinos prontos</h2>
           </div>
+          <div className="chip-row">
+            {["Todos", ...presetCategories].map((category) => (
+              <button
+                key={category}
+                type="button"
+                className={presetCategory === category ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+                onClick={() => setPresetCategory(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mode-grid">
-          {defaultPresets.map((mode) => (
+          {visiblePresets.map((mode) => (
             <ModeCard key={mode.id} mode={applyRankDifficulty(mode)} onStart={handleStartMode} />
           ))}
         </div>
@@ -693,7 +564,7 @@ export default function App() {
         <div className="creator-grid">
           <article className="settings-card">
             <label className="field">
-              <span>Buscar por titulo, autor ou descricao</span>
+              <span>Buscar por título, autor ou descrição</span>
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -703,13 +574,13 @@ export default function App() {
             <p>
               {isSupabaseConfigured
                 ? `${filteredPublishedModes.length} mapa(s) encontrados na comunidade.`
-                : "Configure o Supabase para liberar a biblioteca publica de mapas."}
+                : "Configure o Supabase para liberar a biblioteca pública de mapas."}
             </p>
           </article>
 
           <article className="settings-card">
             <span className="eyebrow">Como funciona</span>
-            <p>Voce monta o mapa no editor, testa sem publicar e so depois envia para a comunidade com titulo, autor e descricao.</p>
+            <p>Monte o mapa no editor, teste sem publicar e só depois envie para a comunidade com título, autor e descrição.</p>
           </article>
         </div>
 
@@ -720,43 +591,10 @@ export default function App() {
         </div>
       </section>
 
-      <SettingsPanel
-        settings={settings}
-        onSettingsChange={setSettings}
-        musicTracks={musicTracks}
-        spotify={{
-          isConfigured: isSpotifyConfigured,
-          isConnected: Boolean(spotifySession),
-          isBusy: spotifyBusy,
-          status: spotifyStatus,
-          playback: spotifyPlayback,
-          onConnect: handleSpotifyConnect,
-          onDisconnect: handleSpotifyDisconnect,
-          onPlayPause: () =>
-            handleSpotifyCommand(spotifyPlayback?.is_playing ? "/me/player/pause" : "/me/player/play"),
-          onNext: () => handleSpotifyCommand("/me/player/next", "POST"),
-          onPrevious: () => handleSpotifyCommand("/me/player/previous", "POST"),
-          onRefresh: async () => {
-            if (!spotifySession) {
-              setSpotifyStatus("Conecte o Spotify primeiro.");
-              return;
-            }
+      <SpotifyPanel spotify={spotify} />
 
-            try {
-              setSpotifyBusy(true);
-              const refreshedSession = await ensureSpotifyToken(spotifySession);
-              const playback = await spotifyRequest(refreshedSession, "/me/player");
-              setSpotifySession(refreshedSession);
-              setSpotifyPlayback(playback);
-              setSpotifyStatus("Estado do Spotify atualizado.");
-            } catch (refreshError) {
-              setSpotifyStatus(refreshError.message);
-            } finally {
-              setSpotifyBusy(false);
-            }
-          },
-        }}
-      />
+      <SettingsPanel settings={settings} onSettingsChange={setSettings} musicTracks={musicTracks} />
+
       <TrainingBuilder
         draft={customDraft}
         onDraftChange={(nextDraft) => setCustomDraft(withBuilderDefaults(nextDraft))}
@@ -766,13 +604,8 @@ export default function App() {
       />
 
       {lastSession && (
-        <SessionStats
-          stats={lastSession.stats}
-          modeName={lastSession.modeName}
-          onBack={() => setLastSession(null)}
-        />
+        <SessionStats stats={lastSession.stats} modeName={lastSession.modeName} onBack={() => setLastSession(null)} />
       )}
     </main>
   );
 }
-

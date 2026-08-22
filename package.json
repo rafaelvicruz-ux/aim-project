@@ -11,13 +11,16 @@
   "dependencies": {
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.17.10",
+    "@react-three/postprocessing": "^2.19.1",
     "@supabase/supabase-js": "^2.112.3",
+    "postprocessing": "^6.39.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.185.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "playwright": "^1.62.1",
     "vite": "^5.4.10"
   }
 }

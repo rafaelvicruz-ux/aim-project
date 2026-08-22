@@ -1,32 +1,42 @@
+import { Crosshair, defaultCrosshair } from "./game/GameHud";
+
 const minSensitivity = 0.2;
 const maxSensitivity = 2.5;
 
-export function SettingsPanel({ settings, onSettingsChange, musicTracks, spotify }) {
-  const activeQueue = settings.musicQueue ?? [];
+const qualityOptions = [
+  { id: "low", label: "Desempenho", help: "Sem bloom nem estrelas. Melhor FPS em máquina fraca." },
+  { id: "medium", label: "Equilibrado", help: "Bloom e sombras suaves, sem partículas extras." },
+  { id: "high", label: "Qualidade", help: "Bloom, partículas, luzes dos postes e sombras grandes." },
+];
 
-  const handleSensitivityChange = (event) => {
-    onSettingsChange({
-      ...settings,
-      sensitivity: Number(event.target.value),
-    });
-  };
+const crosshairStyles = [
+  { id: "cross-dot", label: "Cruz + ponto" },
+  { id: "cross", label: "Cruz" },
+  { id: "dot", label: "Ponto" },
+  { id: "circle", label: "Círculo" },
+];
+
+const crosshairColors = ["#7cf8c8", "#ffffff", "#ff5c5c", "#ffd166", "#7ac7ff", "#c96bff"];
+
+const crosshairSliders = [
+  { key: "size", label: "Tamanho", min: 3, max: 22, step: 1, unit: "px" },
+  { key: "thickness", label: "Espessura", min: 1, max: 6, step: 1, unit: "px" },
+  { key: "gap", label: "Abertura", min: 0, max: 18, step: 1, unit: "px" },
+];
+
+export function SettingsPanel({ settings, onSettingsChange, musicTracks }) {
+  const activeQueue = settings.musicQueue ?? [];
+  const crosshair = { ...defaultCrosshair, ...(settings.crosshair ?? {}) };
+
+  const update = (patch) => onSettingsChange({ ...settings, ...patch });
+  const updateCrosshair = (patch) => update({ crosshair: { ...crosshair, ...patch } });
 
   const handleMusicToggle = (trackId) => {
     const nextQueue = activeQueue.includes(trackId)
       ? activeQueue.filter((id) => id !== trackId)
       : [...activeQueue, trackId];
 
-    onSettingsChange({
-      ...settings,
-      musicQueue: nextQueue,
-    });
-  };
-
-  const handleMusicVolumeChange = (event) => {
-    onSettingsChange({
-      ...settings,
-      musicVolume: Number(event.target.value),
-    });
+    update({ musicQueue: nextQueue });
   };
 
   return (
@@ -34,14 +44,15 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks, spotify
       <div className="panel__header">
         <div>
           <span className="eyebrow">Settings</span>
-          <h2>Sensibilidade e musica</h2>
+          <h2>Mira, gráficos e música</h2>
         </div>
       </div>
 
       <div className="settings-grid">
         <article className="settings-card">
+          <span className="eyebrow">Sensibilidade</span>
           <div className="field__row">
-            <span>Sensibilidade ativa</span>
+            <span>Multiplicador ativo</span>
             <strong>{settings.sensitivity.toFixed(2)}x</strong>
           </div>
           <input
@@ -50,26 +61,107 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks, spotify
             max={maxSensitivity}
             step="0.05"
             value={settings.sensitivity}
-            onChange={handleSensitivityChange}
+            onChange={(event) => update({ sensitivity: Number(event.target.value) })}
           />
-          <p>
-            Valores menores deixam a mira mais controlada. Valores maiores deixam a mira mais rapida.
-          </p>
+          <p>Valores menores deixam a mira mais controlada; maiores deixam mais rápida. Dá para ajustar no meio da sessão pelo menu de pausa.</p>
+
+          <span className="eyebrow">Qualidade gráfica</span>
+          <div className="chip-row">
+            {qualityOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={(settings.quality ?? "high") === option.id ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+                onClick={() => update({ quality: option.id })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p>{qualityOptions.find((option) => option.id === (settings.quality ?? "high"))?.help}</p>
         </article>
 
+        <article className="settings-card crosshair-card">
+          <span className="eyebrow">Mira</span>
+          <div className="crosshair-preview">
+            <Crosshair crosshair={crosshair} />
+          </div>
+
+          <div className="chip-row">
+            {crosshairStyles.map((style) => (
+              <button
+                key={style.id}
+                type="button"
+                className={crosshair.style === style.id ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+                onClick={() => updateCrosshair({ style: style.id })}
+              >
+                {style.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="color-row">
+            {crosshairColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Cor ${color}`}
+                className={crosshair.color === color ? "color-dot color-dot--active" : "color-dot"}
+                style={{ background: color }}
+                onClick={() => updateCrosshair({ color })}
+              />
+            ))}
+          </div>
+
+          {crosshairSliders.map((slider) => (
+            <label className="field field--range" key={slider.key}>
+              <div className="field__row">
+                <span>{slider.label}</span>
+                <strong>
+                  {crosshair[slider.key]}
+                  {slider.unit}
+                </strong>
+              </div>
+              <input
+                type="range"
+                min={slider.min}
+                max={slider.max}
+                step={slider.step}
+                value={crosshair[slider.key]}
+                onChange={(event) => updateCrosshair({ [slider.key]: Number(event.target.value) })}
+              />
+            </label>
+          ))}
+
+          <div className="chip-row">
+            <button
+              type="button"
+              className={crosshair.outline ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+              onClick={() => updateCrosshair({ outline: !crosshair.outline })}
+            >
+              Contorno
+            </button>
+            <button
+              type="button"
+              className={crosshair.dynamic ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+              onClick={() => updateCrosshair({ dynamic: !crosshair.dynamic })}
+            >
+              Abre ao atirar
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <div className="settings-grid">
         <article className="settings-card">
-          <span className="eyebrow">Musica</span>
+          <span className="eyebrow">Fila de música local</span>
           <div className="music-queue">
             {musicTracks.map((track) => {
               const queuePosition = activeQueue.indexOf(track.id);
 
               return (
                 <label key={track.id} className={queuePosition >= 0 ? "music-track music-track--active" : "music-track"}>
-                  <input
-                    type="checkbox"
-                    checked={queuePosition >= 0}
-                    onChange={() => handleMusicToggle(track.id)}
-                  />
+                  <input type="checkbox" checked={queuePosition >= 0} onChange={() => handleMusicToggle(track.id)} />
                   <div>
                     <strong>{track.name}</strong>
                     <span>{queuePosition >= 0 ? `Toca na ordem ${queuePosition + 1}` : "Clique para adicionar na fila"}</span>
@@ -88,68 +180,31 @@ export function SettingsPanel({ settings, onSettingsChange, musicTracks, spotify
             max="1"
             step="0.05"
             value={settings.musicVolume}
-            onChange={handleMusicVolumeChange}
+            onChange={(event) => update({ musicVolume: Number(event.target.value) })}
           />
-          <p>Marque varias musicas para montar uma fila. Elas vao tocar na ordem em que voce clicou.</p>
-        </article>
-      </div>
-
-      <div className="settings-grid settings-grid--spotify">
-        <article className="settings-card spotify-card">
-          <div className="panel__header">
-            <div>
-              <span className="eyebrow">Spotify</span>
-              <h2>Streaming conectado</h2>
-            </div>
-            {spotify?.isConnected ? (
-              <button type="button" className="ghost-button" onClick={spotify.onDisconnect} disabled={spotify.isBusy}>
-                Desconectar
-              </button>
-            ) : (
-              <button type="button" className="primary-button" onClick={spotify?.onConnect} disabled={!spotify?.isConfigured || spotify?.isBusy}>
-                Conectar Spotify
-              </button>
-            )}
-          </div>
-
-          <div className="spotify-status">
-            <strong>
-              {spotify?.playback?.item?.name
-                ? spotify.playback.item.name
-                : spotify?.isConnected
-                  ? "Spotify conectado"
-                  : "Spotify nao conectado"}
-            </strong>
-            <span>
-              {spotify?.playback?.item?.artists?.length
-                ? spotify.playback.item.artists.map((artist) => artist.name).join(", ")
-                : spotify?.status || "Conecte sua conta para mostrar a musica atual e controlar a reproducao."}
-            </span>
-          </div>
-
-          <div className="spotify-controls">
-            <button type="button" className="ghost-button" onClick={spotify?.onPrevious} disabled={!spotify?.isConnected || spotify?.isBusy}>
-              Voltar
-            </button>
-            <button type="button" className="primary-button" onClick={spotify?.onPlayPause} disabled={!spotify?.isConnected || spotify?.isBusy}>
-              {spotify?.playback?.is_playing ? "Pausar" : "Tocar"}
-            </button>
-            <button type="button" className="ghost-button" onClick={spotify?.onNext} disabled={!spotify?.isConnected || spotify?.isBusy}>
-              Proxima
-            </button>
-            <button type="button" className="ghost-button" onClick={spotify?.onRefresh} disabled={!spotify?.isConnected || spotify?.isBusy}>
-              Atualizar
-            </button>
-          </div>
         </article>
 
         <article className="settings-card">
-          <span className="eyebrow">Notas</span>
+          <span className="eyebrow">HUD</span>
+          <div className="chip-row">
+            <button
+              type="button"
+              className={settings.showFeed !== false ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+              onClick={() => update({ showFeed: settings.showFeed === false })}
+            >
+              Feed de acertos
+            </button>
+            <button
+              type="button"
+              className={settings.showTrackInGame !== false ? "pattern-chip pattern-chip--active" : "pattern-chip"}
+              onClick={() => update({ showTrackInGame: settings.showTrackInGame === false })}
+            >
+              Música na HUD
+            </button>
+          </div>
           <p>
-            O Spotify web usa login do usuario e, para controle de playback completo, normalmente precisa de conta Premium.
-          </p>
-          <p>
-            Para ativar aqui no projeto, preencha `VITE_SPOTIFY_CLIENT_ID` e `VITE_SPOTIFY_REDIRECT_URI` no `.env`.
+            Se a fila local estiver ativa junto com o Spotify, silencie uma das duas: a fila local toca por cima do
+            player do Spotify.
           </p>
         </article>
       </div>

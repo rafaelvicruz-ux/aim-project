@@ -1,106 +1,141 @@
-import { OrbitControls, TransformControls } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
-import { useRef } from "react";
-import { getArenaPrefab } from "../data/gameConfig";
+import { GizmoHelper, GizmoViewport, Grid, OrbitControls, TransformControls } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import { getArenaPrefab, snapValue } from "../data/gameConfig";
+import {
+  ARENA_HALF,
+  ArenaFloor,
+  ArenaLights,
+  ArenaProps,
+  ArenaWalls,
+  GradientSky,
+} from "./scene/ArenaEnvironment";
+import { SceneProp } from "./scene/SceneProp";
 
-function ObstacleModel({ obstacle, selected, onSelect, transformMode, onTransformEntity, orbitRef }) {
+const CAMERA_VIEWS = {
+  perspective: { position: [34, 30, 34], target: [0, 0, 0] },
+  top: { position: [0, 72, 0.001], target: [0, 0, 0] },
+  front: { position: [0, 12, 62], target: [0, 4, 0] },
+  side: { position: [62, 12, 0], target: [0, 4, 0] },
+};
+
+function SelectionHalo({ selected }) {
+  const ref = useRef(null);
+
+  useFrame(({ clock }) => {
+    if (!ref.current || !selected) {
+      return;
+    }
+
+    const pulse = 0.6 + Math.sin(clock.elapsedTime * 4) * 0.25;
+    ref.current.material.opacity = pulse;
+    ref.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 4) * 0.05);
+  });
+
+  if (!selected) {
+    return null;
+  }
+
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]}>
+      <ringGeometry args={[1.4, 1.85, 40]} />
+      <meshBasicMaterial color="#ff9a3d" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function EditorEntity({ entity, kind, selected, transformMode, snap, onSelect, onTransform, orbitRef }) {
   const objectRef = useRef(null);
 
-  const content = (() => {
-    if (obstacle.type === "trash-can") {
-      return (
-        <>
-          <mesh castShadow receiveShadow position={[0, 0.9, 0]}>
-            <cylinderGeometry args={[0.5, 0.58, 1.7, 18]} />
-            <meshStandardMaterial color="#586271" metalness={0.45} roughness={0.48} />
-          </mesh>
-          <mesh castShadow receiveShadow position={[0, 1.84, 0]}>
-            <cylinderGeometry args={[0.56, 0.56, 0.12, 18]} />
-            <meshStandardMaterial color="#2a3340" metalness={0.38} roughness={0.4} />
-          </mesh>
-        </>
-      );
+  useEffect(() => {
+    const object = objectRef.current;
+    if (!object) {
+      return;
     }
 
-    if (obstacle.type === "truck") {
-      return (
-        <>
-          <mesh castShadow receiveShadow position={[0, 1.1, 0]}>
-            <boxGeometry args={[4.8, 1.8, 2.2]} />
-            <meshStandardMaterial color="#b53c28" metalness={0.32} roughness={0.45} />
-          </mesh>
-          <mesh castShadow receiveShadow position={[1.75, 1.3, 0]}>
-            <boxGeometry args={[1.6, 2.1, 2]} />
-            <meshStandardMaterial color="#d96c2f" metalness={0.22} roughness={0.4} />
-          </mesh>
-        </>
-      );
+    object.position.set(entity.position[0], kind === "spawn" ? 0 : 0, entity.position[2]);
+    if (kind === "obstacle") {
+      object.rotation.set(0, entity.rotation?.[1] ?? 0, 0);
+      object.scale.setScalar(entity.scale ?? 1);
+    }
+  }, [entity.position, entity.rotation, entity.scale, kind]);
+
+  const handleObjectChange = () => {
+    const object = objectRef.current;
+    if (!object) {
+      return;
     }
 
-    if (obstacle.type === "rock") {
-      return (
-        <mesh castShadow receiveShadow>
-          <dodecahedronGeometry args={[1.3, 0]} />
-          <meshStandardMaterial color="#73706b" roughness={0.96} metalness={0.06} />
-        </mesh>
-      );
-    }
-
-    return (
-      <>
-        <mesh castShadow receiveShadow position={[0, 0.85, 0]}>
-          <boxGeometry args={[1.8, 0.15, 1.2]} />
-          <meshStandardMaterial color="#7e5739" roughness={0.82} />
-        </mesh>
-        <mesh castShadow receiveShadow position={[-1.1, 0.55, 0]}>
-          <boxGeometry args={[0.5, 1.1, 0.5]} />
-          <meshStandardMaterial color="#8d684b" roughness={0.84} />
-        </mesh>
-      </>
+    onTransform(
+      { kind, id: entity.id },
+      {
+        position: [snapValue(object.position.x, snap), 0, snapValue(object.position.z, snap)],
+        rotation: [0, Number(object.rotation.y.toFixed(3)), 0],
+        scale: Number(object.scale.x.toFixed(2)),
+      },
     );
-  })();
+  };
 
   return (
     <>
       <group
         ref={objectRef}
-        position={obstacle.position}
-        rotation={obstacle.rotation ?? [0, 0, 0]}
-        scale={obstacle.scale ?? 1}
         onClick={(event) => {
           event.stopPropagation();
-          onSelect({ kind: "obstacle", id: obstacle.id });
+          onSelect({ kind, id: entity.id });
         }}
       >
-        {content}
-        {selected ? (
-          <mesh position={[0, 2.6, 0]}>
-            <sphereGeometry args={[0.22, 12, 12]} />
-            <meshBasicMaterial color="#ff7a1a" />
-          </mesh>
-        ) : null}
+        {kind === "spawn" ? (
+          <group>
+            <mesh position={[0, entity.height ?? 1.7, 0]} castShadow>
+              <icosahedronGeometry args={[0.46, 1]} />
+              <meshStandardMaterial
+                color={selected ? "#ff9a3d" : "#5fb8ff"}
+                emissive={selected ? "#c74f00" : "#12496f"}
+                emissiveIntensity={1.4}
+                roughness={0.3}
+                flatShading
+              />
+            </mesh>
+            <mesh position={[0, (entity.height ?? 1.7) / 2, 0]}>
+              <cylinderGeometry args={[0.05, 0.05, entity.height ?? 1.7, 8]} />
+              <meshBasicMaterial color={selected ? "#ffb36b" : "#7bd1ff"} transparent opacity={0.55} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+              <ringGeometry args={[0.85, 1.25, 28]} />
+              <meshBasicMaterial
+                color={selected ? "#ffb36b" : "#7bd1ff"}
+                transparent
+                opacity={0.75}
+                side={THREE.DoubleSide}
+                depthWrite={false}
+              />
+            </mesh>
+          </group>
+        ) : (
+          <SceneProp type={entity.type} />
+        )}
+        <SelectionHalo selected={selected} />
       </group>
+
       {selected ? (
         <TransformControls
           object={objectRef}
           mode={transformMode}
-          size={0.75}
+          size={0.8}
+          translationSnap={snap || null}
+          rotationSnap={Math.PI / 24}
+          scaleSnap={0.1}
+          showX={transformMode !== "rotate"}
+          showY={transformMode !== "translate"}
+          showZ={transformMode !== "rotate"}
+          onMouseUp={handleObjectChange}
+          onObjectChange={handleObjectChange}
           onDraggingChanged={(event) => {
             if (orbitRef.current) {
               orbitRef.current.enabled = !event.value;
             }
-          }}
-          onObjectChange={() => {
-            const object = objectRef.current;
-            if (!object) {
-              return;
-            }
-
-            onTransformEntity({ kind: "obstacle", id: obstacle.id }, {
-              position: [object.position.x, object.position.y, object.position.z],
-              rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-              scale: object.scale.x,
-            });
           }}
         />
       ) : null}
@@ -108,177 +143,240 @@ function ObstacleModel({ obstacle, selected, onSelect, transformMode, onTransfor
   );
 }
 
-function SpawnNode({ node, selected, onSelect, transformMode, onTransformEntity, orbitRef }) {
-  const objectRef = useRef(null);
+function PlacementLayer({ placing, snap, onPlace, onGhostMove, orbitRef }) {
+  const planeRef = useRef(null);
+
+  if (!placing) {
+    return null;
+  }
 
   return (
-    <>
-      <group
-        ref={objectRef}
-        position={node.position}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect({ kind: "spawn", id: node.id });
-        }}
-      >
-        <mesh position={[0, node.height ?? 1.7, 0]} castShadow>
-          <sphereGeometry args={[0.5, 16, 16]} />
-          <meshStandardMaterial color={selected ? "#ff7a1a" : "#67bbff"} emissive="#173a55" emissiveIntensity={0.8} />
-        </mesh>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-          <ringGeometry args={[0.8, 1.25, 24]} />
-          <meshBasicMaterial color={selected ? "#ffb36b" : "#7bd1ff"} />
-        </mesh>
-      </group>
-      {selected ? (
-        <TransformControls
-          object={objectRef}
-          mode={transformMode}
-          size={0.75}
-          onDraggingChanged={(event) => {
-            if (orbitRef.current) {
-              orbitRef.current.enabled = !event.value;
-            }
-          }}
-          onObjectChange={() => {
-            const object = objectRef.current;
-            if (!object) {
-              return;
-            }
-
-            onTransformEntity({ kind: "spawn", id: node.id }, {
-              position: [object.position.x, object.position.y, object.position.z],
-              rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-              scale: object.scale.x,
-            });
-          }}
-        />
-      ) : null}
-    </>
+    <mesh
+      ref={planeRef}
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0.005, 0]}
+      onPointerMove={(event) => {
+        event.stopPropagation();
+        onGhostMove([snapValue(event.point.x, snap), 0, snapValue(event.point.z, snap)]);
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        if (orbitRef.current) {
+          orbitRef.current.enabled = false;
+        }
+      }}
+      onPointerUp={(event) => {
+        event.stopPropagation();
+        if (orbitRef.current) {
+          orbitRef.current.enabled = true;
+        }
+        onPlace([snapValue(event.point.x, snap), 0, snapValue(event.point.z, snap)]);
+      }}
+    >
+      <planeGeometry args={[ARENA_HALF * 2, ARENA_HALF * 2]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
   );
 }
 
-function ArenaProps({ arenaPrefab }) {
-  if (arenaPrefab === "dock-lanes") {
-    return (
-      <>
-        {[-18, 18].map((x) => (
-          <mesh key={x} position={[x, 2.4, -6]} castShadow receiveShadow>
-            <boxGeometry args={[2.8, 4.8, 16]} />
-            <meshStandardMaterial color="#2d374d" roughness={0.76} />
-          </mesh>
-        ))}
-      </>
-    );
+function Ghost({ placing, position }) {
+  const ref = useRef(null);
+
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.position.y = Math.sin(clock.elapsedTime * 3) * 0.08;
+    }
+  });
+
+  if (!placing) {
+    return null;
   }
 
-  if (arenaPrefab === "vertical-core") {
-    return (
-      <>
-        {[-14, 0, 14].map((x) => (
-          <mesh key={x} position={[x, 5.4, -10]} castShadow receiveShadow>
-            <cylinderGeometry args={[1.8, 1.8, 10.8, 20]} />
-            <meshStandardMaterial color="#1d2b45" roughness={0.68} />
+  return (
+    <group position={position}>
+      <group ref={ref}>
+        {placing === "spawn" ? (
+          <mesh position={[0, 1.7, 0]}>
+            <icosahedronGeometry args={[0.46, 1]} />
+            <meshBasicMaterial color="#7bd1ff" transparent opacity={0.55} />
           </mesh>
-        ))}
-      </>
-    );
-  }
-
-  if (arenaPrefab === "crossfire-yard") {
-    return (
-      <mesh position={[0, 1.5, -8]} castShadow receiveShadow>
-        <boxGeometry args={[6.5, 3, 6.5]} />
-        <meshStandardMaterial color="#26364f" roughness={0.78} />
+        ) : (
+          <SceneProp type={placing} />
+        )}
+      </group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <ringGeometry args={[1.1, 1.5, 32]} />
+        <meshBasicMaterial color="#7cf8c8" transparent opacity={0.8} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
-    );
-  }
-
-  return (
-    <>
-      {[-20, 0, 20].map((x) => (
-        <mesh key={x} position={[x, 3.2, -22]} castShadow receiveShadow>
-          <boxGeometry args={[2.2, 6.4, 2.2]} />
-          <meshStandardMaterial color="#1a2333" roughness={0.82} />
-        </mesh>
-      ))}
-    </>
+    </group>
   );
 }
 
-function EditorScene({ draft, selection, transformMode, onSelectEntity, onTransformEntity }) {
-  const arena = getArenaPrefab(draft.arenaPrefab);
+function CameraRig({ view, focusTarget, orbitRef }) {
+  const { camera } = useThree();
+  const desired = useRef(null);
+
+  useEffect(() => {
+    const preset = CAMERA_VIEWS[view] ?? CAMERA_VIEWS.perspective;
+    desired.current = {
+      position: new THREE.Vector3(...preset.position),
+      target: new THREE.Vector3(...preset.target),
+    };
+  }, [view]);
+
+  useEffect(() => {
+    if (!focusTarget) {
+      return;
+    }
+
+    const target = new THREE.Vector3(...focusTarget);
+    desired.current = {
+      position: target.clone().add(new THREE.Vector3(12, 12, 12)),
+      target,
+    };
+  }, [focusTarget]);
+
+  useFrame(() => {
+    if (!desired.current || !orbitRef.current) {
+      return;
+    }
+
+    camera.position.lerp(desired.current.position, 0.12);
+    orbitRef.current.target.lerp(desired.current.target, 0.12);
+    orbitRef.current.update();
+
+    if (camera.position.distanceTo(desired.current.position) < 0.15) {
+      desired.current = null;
+    }
+  });
+
+  return null;
+}
+
+function EditorScene({
+  draft,
+  selection,
+  transformMode,
+  snap,
+  placing,
+  view,
+  focusTarget,
+  showGrid,
+  onSelectEntity,
+  onTransformEntity,
+  onPlace,
+}) {
+  const arena = useMemo(() => getArenaPrefab(draft.arenaPrefab), [draft.arenaPrefab]);
   const orbitRef = useRef(null);
+  const [ghostPosition, setGhostPosition] = useState([0, 0, 0]);
 
   return (
     <>
-      <color attach="background" args={["#0a1019"]} />
-      <fog attach="fog" args={["#0a1019", 50, 110]} />
-      <ambientLight intensity={1} />
-      <directionalLight position={[16, 24, 12]} intensity={1.7} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-      <pointLight position={[0, 12, 0]} intensity={8} color={arena.accentColor} distance={50} />
-      <gridHelper args={[96, 24, arena.accentColor, "#243247"]} position={[0, 0.01, 0]} />
-      <OrbitControls ref={orbitRef} makeDefault minDistance={16} maxDistance={96} target={[0, 0, 0]} />
+      <fogExp2 attach="fog" args={[arena.skyBottom ?? "#0a1019", 0.004]} />
+      <GradientSky arena={arena} />
+      <ArenaLights arena={arena} quality="medium" />
 
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[96, 96]} />
-        <meshStandardMaterial color={arena.floorColor} roughness={0.95} />
-      </mesh>
+      <OrbitControls
+        ref={orbitRef}
+        makeDefault
+        enableDamping
+        dampingFactor={0.08}
+        minDistance={10}
+        maxDistance={140}
+        maxPolarAngle={Math.PI / 2.05}
+      />
+      <CameraRig view={view} focusTarget={focusTarget} orbitRef={orbitRef} />
 
-      <mesh position={[0, 16, -38]} receiveShadow>
-        <boxGeometry args={[90, 32, 2]} />
-        <meshStandardMaterial color={arena.wallColor} />
-      </mesh>
-      <mesh position={[38, 12, 0]} receiveShadow>
-        <boxGeometry args={[2, 24, 90]} />
-        <meshStandardMaterial color={arena.wallColor} />
-      </mesh>
-      <mesh position={[-38, 12, 0]} receiveShadow>
-        <boxGeometry args={[2, 24, 90]} />
-        <meshStandardMaterial color={arena.wallColor} />
-      </mesh>
+      <group>
+        <ArenaFloor arena={arena} />
+        <ArenaWalls arena={arena} />
+        <ArenaProps arena={arena} />
+      </group>
 
-      <ArenaProps arenaPrefab={draft.arenaPrefab} />
+      {showGrid ? (
+        <Grid
+          args={[ARENA_HALF * 2, ARENA_HALF * 2]}
+          cellSize={2}
+          cellThickness={0.6}
+          cellColor={arena.accentColor}
+          sectionSize={8}
+          sectionThickness={1.1}
+          sectionColor={arena.accentColor}
+          fadeDistance={130}
+          fadeStrength={1.2}
+          followCamera={false}
+          infiniteGrid={false}
+          position={[0, 0.02, 0]}
+        />
+      ) : null}
+
+      <PlacementLayer
+        placing={placing}
+        snap={snap}
+        onPlace={onPlace}
+        onGhostMove={setGhostPosition}
+        orbitRef={orbitRef}
+      />
+      <Ghost placing={placing} position={ghostPosition} />
 
       {(draft.spawnNodes ?? []).map((node) => (
-        <SpawnNode
+        <EditorEntity
           key={node.id}
-          node={node}
+          entity={node}
+          kind="spawn"
           selected={selection?.kind === "spawn" && selection.id === node.id}
-          onSelect={onSelectEntity}
           transformMode={transformMode}
-          onTransformEntity={onTransformEntity}
+          snap={snap}
+          onSelect={onSelectEntity}
+          onTransform={onTransformEntity}
           orbitRef={orbitRef}
         />
       ))}
 
       {(draft.obstacles ?? []).map((obstacle) => (
-        <ObstacleModel
+        <EditorEntity
           key={obstacle.id}
-          obstacle={obstacle}
+          entity={obstacle}
+          kind="obstacle"
           selected={selection?.kind === "obstacle" && selection.id === obstacle.id}
-          onSelect={onSelectEntity}
           transformMode={transformMode}
-          onTransformEntity={onTransformEntity}
+          snap={snap}
+          onSelect={onSelectEntity}
+          onTransform={onTransformEntity}
           orbitRef={orbitRef}
         />
       ))}
+
+      <GizmoHelper alignment="bottom-right" margin={[68, 68]}>
+        <GizmoViewport axisColors={["#ff6b6b", "#6ce5a0", "#5fb8ff"]} labelColor="#0b1019" />
+      </GizmoHelper>
     </>
   );
 }
 
-export function MapEditorViewport({ draft, selection, transformMode, onSelectEntity, onTransformEntity }) {
+export function MapEditorViewport(props) {
   return (
-    <div className="editor-viewport">
-      <Canvas shadows camera={{ position: [28, 28, 28], fov: 48 }}>
-        <EditorScene
-          draft={draft}
-          selection={selection}
-          transformMode={transformMode}
-          onSelectEntity={onSelectEntity}
-          onTransformEntity={onTransformEntity}
-        />
+    <div className={`editor-viewport ${props.placing ? "editor-viewport--placing" : ""}`}>
+      <Canvas
+        shadows
+        dpr={[1, 1.75]}
+        camera={{ position: CAMERA_VIEWS.perspective.position, fov: 46, near: 0.5, far: 600 }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+        onPointerMissed={() => props.onSelectEntity(null)}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.05;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        }}
+      >
+        <EditorScene {...props} />
       </Canvas>
+
+      {props.placing ? (
+        <div className="editor-viewport__hint">
+          Clique no piso para posicionar · <kbd>Esc</kbd> cancela
+        </div>
+      ) : null}
     </div>
   );
 }
