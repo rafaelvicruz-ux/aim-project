@@ -97,13 +97,23 @@ export function useSpotify({ enabled = true } = {}) {
   /* -------- perfil, playlists e devices -------- */
 
   const refreshDevices = useCallback(async () => {
-    const data = await spotify.devices().catch(() => null);
-    setDevices(data?.devices ?? []);
+    try {
+      const data = await spotify.devices();
+      setDevices(data?.devices ?? []);
+    } catch (error) {
+      setDevices([]);
+      setStatus(error.message);
+    }
   }, []);
 
   const loadPlaylists = useCallback(async () => {
-    const data = await spotify.playlists().catch(() => null);
-    setPlaylists(data?.items?.filter(Boolean) ?? []);
+    try {
+      const data = await spotify.playlists();
+      setPlaylists(data?.items?.filter(Boolean) ?? []);
+    } catch (error) {
+      setPlaylists([]);
+      setStatus(error.message);
+    }
   }, []);
 
   useEffect(() => {

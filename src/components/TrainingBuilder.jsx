@@ -17,12 +17,13 @@ import {
   spawnPresets,
 } from "../data/gameConfig";
 import { customTemplate, patternOptions } from "../data/presets";
+import { decodeMapCode, encodeMapCode } from "../lib/mapShare";
 
 const BUILDER_TABS = [
   { id: "layout", label: "Layout 3D", hint: "Monte a arena, spawns e cobertura" },
   { id: "gameplay", label: "Gameplay", hint: "Ritmo, dificuldade e pontuação" },
   { id: "scripts", label: "Scripts", hint: "HUD e regras em React" },
-  { id: "publish", label: "Publicar", hint: "Revisão e envio para a comunidade" },
+  { id: "share", label: "Compartilhar", hint: "Gere um código e envie para alguém" },
 ];
 
 const scoringOptions = [
@@ -207,7 +208,7 @@ function createPresetSpawnNodes(spawnPresetId) {
   }));
 }
 
-export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, publishMessage }) {
+export function TrainingBuilder({ draft, onDraftChange, onPreview, statusMessage }) {
   const [tab, setTab] = useState("layout");
   const [selection, setSelection] = useState(null);
   const [transformMode, setTransformMode] = useState("translate");
@@ -220,11 +221,8 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
   const [selectedScriptId, setSelectedScriptId] = useState(
     draft.scriptAreas?.[0]?.id ?? defaultCodeWorkspace.scriptAreas[0].id,
   );
-  const [publishForm, setPublishForm] = useState({
-    title: draft.name ?? "Meu mapa 3D",
-    author: "",
-    description: draft.description ?? "",
-  });
+  const [importCode, setImportCode] = useState("");
+  const [shareStatus, setShareStatus] = useState("");
 
   const history = useRef({ past: [], future: [] });
   const [historySize, setHistorySize] = useState({ past: 0, future: 0 });
@@ -282,8 +280,32 @@ export function TrainingBuilder({ draft, onDraftChange, onPreview, onPublish, pu
     applyDraft({ ...customTemplate, ...defaultCodeWorkspace });
   };
 
-  const handlePublishChange = (field, value) => {
-    setPublishForm((current) => ({ ...current, [field]: value }));
+  const shareCode = useMemo(() => encodeMapCode(draft), [draft]);
+
+  const handleCopyShareCode = async () => {
+    try {
+      await navigator.clipboard.writeText(shareCode);
+      setShareStatus("Código copiado. Cole numa conversa e mande para a pessoa.");
+    } catch {
+      setShareStatus("Não consegui copiar automaticamente. Selecione o código e copie manualmente.");
+    }
+  };
+
+  const handleImportMap = () => {
+    if (!importCode.trim()) {
+      setShareStatus("Cole o código do mapa antes de importar.");
+      return;
+    }
+
+    try {
+      const importedDraft = decodeMapCode(importCode);
+      setSelection(null);
+      applyDraft({ ...customTemplate, ...defaultCodeWorkspace, ...importedDraft });
+      setImportCode("");
+      setShareStatus("Mapa importado. Já apareceu no editor, você pode testar ou ajustar.");
+    } catch (error) {
+      setShareStatus(error.message);
+    }
   };
 
   const handleLogicPresetApply = (preset) => {
@@ -677,10 +699,10 @@ export function CustomTrainingScene() {
             Resetar
           </button>
           <button className="ghost-button" type="button" onClick={onPreview}>
-            Testar sem publicar
+            Testar mapa
           </button>
-          <button className="primary-button" type="button" onClick={() => setTab("publish")}>
-            Publicar mapa
+          <button className="primary-button" type="button" onClick={() => setTab("share")}>
+            Compartilhar mapa
           </button>
         </div>
       </div>
@@ -1287,100 +1309,49 @@ export function CustomTrainingScene() {
         </div>
       ) : null}
 
-      {tab === "publish" ? (
-        <div className="builder__publish">
-          <div className="builder__meta-grid">
+      {tab === "share" ? (
+        <div className="creator-grid">
+          <article className="settings-card">
+            <span className="eyebrow">Enviar este mapa</span>
+            <h2>Código para compartilhar</h2>
+            <p>Copie o código abaixo e mande para a pessoa por qualquer app de mensagem. Ela cola o código na aba Compartilhar do jogo dela e o mapa aparece no editor pronta para testar.</p>
+            <textarea rows="6" value={shareCode} readOnly spellCheck="false" onFocus={(event) => event.target.select()} />
+            <button type="button" className="primary-button" onClick={handleCopyShareCode}>
+              Copiar código
+            </button>
+            {warnings.length ? (
+              <ul className="editor-warnings">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>Mapa completo, sem pendências.</p>
+            )}
+          </article>
+
+          <article className="settings-card">
+            <span className="eyebrow">Receber um mapa</span>
+            <h2>Importar código recebido</h2>
+            <p>Cole aqui o código que alguém te mandou. O mapa importado substitui o que está aberto no editor agora.</p>
             <label className="field">
-              <span>Título publicado</span>
-              <input
-                value={publishForm.title}
-                onChange={(event) => handlePublishChange("title", event.target.value)}
-                placeholder="Nome que aparecerá para todo mundo"
-              />
-            </label>
-            <label className="field">
-              <span>Autor</span>
-              <input
-                value={publishForm.author}
-                onChange={(event) => handlePublishChange("author", event.target.value)}
-                placeholder="Seu nome ou nick"
-              />
-            </label>
-            <label className="field">
-              <span>Descrição pública</span>
+              <span>Código do mapa</span>
               <textarea
-                rows="4"
-                value={publishForm.description}
-                onChange={(event) => handlePublishChange("description", event.target.value)}
-                placeholder="Explique o treino e o estilo do mapa"
+                rows="6"
+                spellCheck="false"
+                value={importCode}
+                onChange={(event) => setImportCode(event.target.value)}
+                placeholder="Cole aqui o código que você recebeu..."
               />
             </label>
-          </div>
-
-          <div className="creator-grid">
-            <article className="settings-card">
-              <span className="eyebrow">Resumo do mapa</span>
-              <dl className="publish-summary">
-                <div>
-                  <dt>Arena</dt>
-                  <dd>{selectedArena.label}</dd>
-                </div>
-                <div>
-                  <dt>Duração</dt>
-                  <dd>{draft.duration}s</dd>
-                </div>
-                <div>
-                  <dt>Objetivo</dt>
-                  <dd>{draft.goalHits} hits</dd>
-                </div>
-                <div>
-                  <dt>Padrão</dt>
-                  <dd>{draft.pattern}</dd>
-                </div>
-                <div>
-                  <dt>Score</dt>
-                  <dd>{draft.scoring}</dd>
-                </div>
-                <div>
-                  <dt>Props</dt>
-                  <dd>{draft.obstacles?.length ?? 0}</dd>
-                </div>
-                <div>
-                  <dt>Spawns</dt>
-                  <dd>{draft.spawnNodes?.length ?? 0}</dd>
-                </div>
-                <div>
-                  <dt>Headshot</dt>
-                  <dd>{draft.requireHeadshot ? "obrigatório" : "livre"}</dd>
-                </div>
-              </dl>
-            </article>
-
-            <article className="settings-card builder__publish-card">
-              <span className="eyebrow">Checklist</span>
-              {warnings.length ? (
-                <ul className="editor-warnings">
-                  {warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Tudo certo. O mapa está pronto para ir para a busca da comunidade.</p>
-              )}
-              <div className="builder__publish-actions">
-                <button type="button" className="ghost-button" onClick={onPreview}>
-                  Testar antes
-                </button>
-                <button type="button" className="primary-button" onClick={() => onPublish(publishForm)}>
-                  Confirmar publicação
-                </button>
-              </div>
-            </article>
-          </div>
+            <button type="button" className="ghost-button" onClick={handleImportMap}>
+              Importar mapa
+            </button>
+          </article>
         </div>
       ) : null}
 
-      {publishMessage ? <p className="builder__status">{publishMessage}</p> : null}
+      {(statusMessage || shareStatus) ? <p className="builder__status">{shareStatus || statusMessage}</p> : null}
     </section>
   );
 }

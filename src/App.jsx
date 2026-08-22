@@ -152,14 +152,12 @@ export default function App() {
       return withBuilderDefaults(customTemplate);
     }
   });
-  const [publishedModes, setPublishedModes] = useState([]);
   const [activeMode, setActiveMode] = useState(null);
   const [lastSession, setLastSession] = useState(null);
   const [session, setSession] = useState(null);
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [authMessage, setAuthMessage] = useState("");
-  const [saveMessage, setSaveMessage] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [previewMessage, setPreviewMessage] = useState("");
   const [presetCategory, setPresetCategory] = useState("Todos");
   const audioRef = useRef(null);
 
@@ -213,20 +211,6 @@ export default function App() {
 
     return defaultPresets.filter((preset) => preset.category === presetCategory);
   }, [presetCategory]);
-
-  const filteredPublishedModes = useMemo(() => {
-    const normalizedTerm = searchTerm.trim().toLowerCase();
-
-    if (!normalizedTerm) {
-      return publishedModes;
-    }
-
-    return publishedModes.filter((mode) =>
-      [mode.name, mode.description, mode.author, mode.category]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(normalizedTerm)),
-    );
-  }, [publishedModes, searchTerm]);
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -312,37 +296,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!supabase) {
-      return;
-    }
-
-    const loadMaps = async () => {
-      const { data, error } = await supabase
-        .from("published_maps")
-        .select("id, name, author, description, config, created_at")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        setSaveMessage(error.message);
-        return;
-      }
-
-      const normalizedMaps = (data ?? []).map((row) => ({
-        id: row.id,
-        ...row.config,
-        name: row.name,
-        author: row.author,
-        description: row.description,
-        category: row.config?.category ?? "Comunidade",
-      }));
-
-      setPublishedModes(normalizedMaps);
-    };
-
-    loadMaps();
-  }, []);
-
   const applyRankDifficulty = (mode) => {
     const baseMode = normalizeModeTuning(mode);
     const rankBoost = activeRank.skill;
@@ -400,43 +353,7 @@ export default function App() {
         category: "Preview",
       }),
     );
-    setSaveMessage("Preview iniciado sem publicar.");
-  };
-
-  const handlePublishCustomMode = async ({ title, author, description }) => {
-    if (!supabase) {
-      setSaveMessage("Configure o Supabase para publicar mapas da comunidade.");
-      return;
-    }
-
-    const nextMode = {
-      ...customDraft,
-      name: title.trim() || customDraft.name.trim() || "Meu mapa 3D",
-      author: author.trim() || "Anônimo",
-      description: description.trim() || customDraft.description.trim() || "Mapa publicado pela comunidade.",
-      category: customDraft.category?.trim?.() || "Comunidade",
-    };
-
-    const { data, error } = await supabase
-      .from("published_maps")
-      .insert({
-        name: nextMode.name,
-        author: nextMode.author,
-        description: nextMode.description,
-        config: nextMode,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      setSaveMessage(
-        `${error.message}. Se estiver no Supabase, rode o arquivo supabase-schema.sql atualizado para liberar select e insert da tabela published_maps.`,
-      );
-      return;
-    }
-
-    setPublishedModes((currentModes) => [{ ...nextMode, id: data.id }, ...currentModes]);
-    setSaveMessage("Mapa publicado com sucesso. Ele já aparece na busca da comunidade.");
+    setPreviewMessage("Preview iniciado sem publicar.");
   };
 
   const handleFinish = (rawStats) => {
@@ -553,44 +470,6 @@ export default function App() {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel__header">
-          <div>
-            <span className="eyebrow">Community Maps</span>
-            <h2>Pesquisar mapas publicados</h2>
-          </div>
-        </div>
-
-        <div className="creator-grid">
-          <article className="settings-card">
-            <label className="field">
-              <span>Buscar por título, autor ou descrição</span>
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Ex.: flick, tracking, Rafael"
-              />
-            </label>
-            <p>
-              {isSupabaseConfigured
-                ? `${filteredPublishedModes.length} mapa(s) encontrados na comunidade.`
-                : "Configure o Supabase para liberar a biblioteca pública de mapas."}
-            </p>
-          </article>
-
-          <article className="settings-card">
-            <span className="eyebrow">Como funciona</span>
-            <p>Monte o mapa no editor, teste sem publicar e só depois envie para a comunidade com título, autor e descrição.</p>
-          </article>
-        </div>
-
-        <div className="mode-grid">
-          {filteredPublishedModes.map((mode) => (
-            <ModeCard key={mode.id} mode={applyRankDifficulty(mode)} onStart={handleStartMode} />
-          ))}
-        </div>
-      </section>
-
       <SpotifyPanel spotify={spotify} />
 
       <SettingsPanel settings={settings} onSettingsChange={setSettings} musicTracks={musicTracks} />
@@ -599,8 +478,7 @@ export default function App() {
         draft={customDraft}
         onDraftChange={(nextDraft) => setCustomDraft(withBuilderDefaults(nextDraft))}
         onPreview={handlePreviewDraft}
-        onPublish={handlePublishCustomMode}
-        publishMessage={saveMessage}
+        statusMessage={previewMessage}
       />
 
       {lastSession && (
